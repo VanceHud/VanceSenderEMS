@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import tempfile
 import threading
@@ -36,6 +37,7 @@ def load_config() -> dict[str, Any]:
 
     Uses file-mtime caching: returns an in-memory copy when the file
     has not been modified since the last read, avoiding redundant disk IO.
+    Thread-safe: all cache access is serialized via ``_config_lock``.
     """
     global _cached_config, _cached_config_mtime
 
@@ -49,9 +51,9 @@ def load_config() -> dict[str, Any]:
     except OSError:
         current_mtime = 0.0
 
-    if _cached_config is not None and current_mtime == _cached_config_mtime:
-        import copy
-        return copy.deepcopy(_cached_config)
+    with _config_lock:
+        if _cached_config is not None and current_mtime == _cached_config_mtime:
+            return copy.deepcopy(_cached_config)
 
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -69,9 +71,9 @@ def load_config() -> dict[str, Any]:
     result = _merge_defaults(cfg)
 
     # Update cache
-    import copy
-    _cached_config = copy.deepcopy(result)
-    _cached_config_mtime = current_mtime
+    with _config_lock:
+        _cached_config = copy.deepcopy(result)
+        _cached_config_mtime = current_mtime
 
     return result
 
@@ -86,49 +88,92 @@ def save_config(cfg: dict[str, Any]) -> None:
 
     _ensure_dirs()
     with _config_lock:
-        try:
-            fd, tmp_path = tempfile.mkstemp(
-                suffix=".tmp",
-                prefix="config_",
-                dir=str(CONFIG_PATH.parent),
-            )
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    yaml.dump(
-                        cfg, f, default_flow_style=False,
-                        allow_unicode=True, sort_keys=False,
-                    )
-                os.replace(tmp_path, str(CONFIG_PATH))
-            except BaseException:
-                # Clean up temp file on any write/rename failure
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-                raise
-        except OSError as exc:
-            push_notification(f"配置保存失败: {exc}", level="error")
-            return
+        _save_config_locked(cfg)
 
-        # Refresh cache with newly saved config
-        import copy
+
+def _save_config_locked(cfg: dict[str, Any]) -> None:
+    """Internal save — caller MUST already hold ``_config_lock``."""
+    global _cached_config, _cached_config_mtime
+
+    try:
+        fd, tmp_path = tempfile.mkstemp(
+            suffix=".tmp",
+            prefix="config_",
+            dir=str(CONFIG_PATH.parent),
+        )
         try:
-            _cached_config = copy.deepcopy(cfg)
-            _cached_config_mtime = os.path.getmtime(str(CONFIG_PATH))
-        except OSError:
-            _cached_config = None
-            _cached_config_mtime = 0.0
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                yaml.dump(
+                    cfg, f, default_flow_style=False,
+                    allow_unicode=True, sort_keys=False,
+                )
+            os.replace(tmp_path, str(CONFIG_PATH))
+        except BaseException:
+            # Clean up temp file on any write/rename failure
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+    except OSError as exc:
+        push_notification(f"配置保存失败: {exc}", level="error")
+        return
+
+    # Refresh cache with newly saved config
+    try:
+        _cached_config = copy.deepcopy(cfg)
+        _cached_config_mtime = os.path.getmtime(str(CONFIG_PATH))
+    except OSError:
+        _cached_config = None
+        _cached_config_mtime = 0.0
 
 
 def update_config(patch: dict[str, Any]) -> dict[str, Any]:
     """Merge patch into existing config and save.
 
-    Thread-safe: delegates to ``save_config`` which holds ``_config_lock``.
+    Thread-safe: load + merge + save are performed atomically under
+    ``_config_lock`` to prevent TOCTOU races.
     """
-    cfg = load_config()
-    _deep_merge(cfg, patch)
-    save_config(cfg)
+    _ensure_dirs()
+    with _config_lock:
+        cfg = _load_config_locked()
+        _deep_merge(cfg, patch)
+        _save_config_locked(cfg)
     return cfg
+
+
+def _load_config_locked() -> dict[str, Any]:
+    """Internal config load — caller MUST already hold ``_config_lock``."""
+    global _cached_config, _cached_config_mtime
+
+    if not CONFIG_PATH.exists():
+        return _default_config()
+
+    try:
+        current_mtime = os.path.getmtime(str(CONFIG_PATH))
+    except OSError:
+        current_mtime = 0.0
+
+    if _cached_config is not None and current_mtime == _cached_config_mtime:
+        return copy.deepcopy(_cached_config)
+
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except yaml.YAMLError:
+        push_notification("config.yaml 格式错误，已回退到默认配置。")
+        return _default_config()
+    except OSError:
+        push_notification("config.yaml 读取失败，已回退到默认配置。")
+        return _default_config()
+    if not isinstance(cfg, dict):
+        push_notification("config.yaml 内容不是有效的配置字典，已回退到默认配置。")
+        return _default_config()
+
+    result = _merge_defaults(cfg)
+    _cached_config = copy.deepcopy(result)
+    _cached_config_mtime = current_mtime
+    return result
 
 
 def _deep_merge(base: dict, override: dict) -> None:

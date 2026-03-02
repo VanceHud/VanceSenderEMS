@@ -14,6 +14,7 @@ from app.api.schemas import (
     TextLine,
 )
 from app.core.ai_client import (
+    extract_api_error_details,
     generate_texts,
     generate_texts_stream,
     rewrite_texts,
@@ -21,37 +22,8 @@ from app.core.ai_client import (
 )
 from app.core.config import load_config
 
+
 router = APIRouter()
-
-
-def _build_error_detail(
-    exc: Exception, provider_id: str | None = None
-) -> dict[str, object]:
-    detail: dict[str, object] = {
-        "message": str(exc),
-        "error_type": type(exc).__name__,
-    }
-    if provider_id:
-        detail["provider_id"] = provider_id
-
-    for key in ("status_code", "request_id", "code", "type", "param"):
-        value = getattr(exc, key, None)
-        if value is not None:
-            detail[key] = value
-
-    body = getattr(exc, "body", None)
-    if body is not None:
-        detail["body"] = (
-            body if isinstance(body, (str, int, float, bool, dict, list)) else str(body)
-        )
-
-    response = getattr(exc, "response", None)
-    if response is not None:
-        response_status = getattr(response, "status_code", None)
-        if response_status is not None:
-            detail["response_status"] = response_status
-
-    return detail
 
 
 def _format_test_error(result: dict[str, object]) -> str:
@@ -105,14 +77,14 @@ async def ai_generate(body: AIGenerateRequest):
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=_build_error_detail(exc, provider_id=body.provider_id),
+            detail=extract_api_error_details(exc, provider_id=body.provider_id),
         )
     except Exception as exc:
         raise HTTPException(
             status_code=502,
             detail={
                 "message": "AI服务请求失败",
-                **_build_error_detail(exc, provider_id=body.provider_id),
+                **extract_api_error_details(exc, provider_id=body.provider_id),
             },
         )
 
@@ -169,14 +141,14 @@ async def ai_rewrite(body: AIRewriteRequest):
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=_build_error_detail(exc, provider_id=body.provider_id),
+            detail=extract_api_error_details(exc, provider_id=body.provider_id),
         )
     except Exception as exc:
         raise HTTPException(
             status_code=502,
             detail={
                 "message": "AI服务请求失败",
-                **_build_error_detail(exc, provider_id=body.provider_id),
+                **extract_api_error_details(exc, provider_id=body.provider_id),
             },
         )
 

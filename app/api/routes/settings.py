@@ -53,23 +53,24 @@ router = APIRouter()
 # ── General settings ──────────────────────────────────────────────────────
 
 
-@router.get("", response_model=SettingsResponse)
-async def get_settings(request: Request):
-    """获取全部设置。"""
-    cfg = load_config()
+def _build_ai_section(cfg: dict) -> dict:
+    """Build AI settings section with masked API keys."""
     ai_section = dict(cfg.get("ai", {}))
-    # 隐藏provider中的api_key原文
     providers = ai_section.get("providers", [])
     ai_section["providers"] = [
         {**p, "api_key_set": bool(p.get("api_key"))} for p in providers
     ]
     for p in ai_section["providers"]:
         p.pop("api_key", None)
-    server_section = dict(cfg.get("server", {}))
+    return ai_section
+
+
+def _build_launch_section(cfg: dict) -> dict:
+    """Build normalized launch settings section."""
     launch_raw = cfg.get("launch", {})
     launch_section = launch_raw if isinstance(launch_raw, dict) else {}
     enable_tray_on_start = resolve_enable_tray_on_start(launch_section)
-    launch_section = {
+    return {
         "open_webui_on_start": bool(launch_section.get("open_webui_on_start", False)),
         "open_intro_on_first_start": bool(
             launch_section.get("open_intro_on_first_start", True)
@@ -82,6 +83,11 @@ async def get_settings(request: Request):
             launch_section.get("close_action", "ask")
         ),
     }
+
+
+def _build_server_section(cfg: dict, request: Request) -> dict:
+    """Build server settings section with runtime info and LAN URLs."""
+    server_section = dict(cfg.get("server", {}))
 
     server_host = str(
         getattr(
@@ -106,6 +112,7 @@ async def get_settings(request: Request):
     server_section["port"] = server_port
     server_section["lan_access"] = runtime_lan_access
 
+    # Resolve LAN IPs
     runtime_lan_ipv4_list_raw = getattr(request.app.state, "runtime_lan_ipv4_list", [])
     lan_ipv4_list: list[str] = []
     if isinstance(runtime_lan_ipv4_list_raw, list):
@@ -122,6 +129,7 @@ async def get_settings(request: Request):
     elif not runtime_lan_access:
         lan_ipv4_list = []
 
+    # Build LAN URLs
     lan_url_list = [f"http://{lan_ipv4}:{server_port}" for lan_ipv4 in lan_ipv4_list]
     lan_docs_url_list = [f"{lan_url}/docs" for lan_url in lan_url_list]
 
@@ -138,6 +146,7 @@ async def get_settings(request: Request):
     server_section["webui_url"] = f"http://{browser_host}:{server_port}"
     server_section["docs_url"] = f"{server_section['webui_url']}/docs"
 
+    # App and desktop info
     server_section["app_version"] = APP_VERSION
     server_section["token_set"] = bool(server_section.get("token"))
     server_section["system_tray_supported"] = has_system_tray_support()
@@ -147,6 +156,8 @@ async def get_settings(request: Request):
     server_section["ui_mode"] = (
         "desktop" if desktop_window_state["active"] else "browser"
     )
+
+    # Security warnings
     server_section["risk_no_token_with_lan"] = (
         bool(server_section.get("lan_access")) and not server_section["token_set"]
     )
@@ -157,14 +168,21 @@ async def get_settings(request: Request):
     else:
         server_section["security_warning"] = ""
     server_section.pop("token", None)
+    return server_section
 
+
+@router.get("", response_model=SettingsResponse)
+async def get_settings(request: Request):
+    """获取全部设置。"""
+    cfg = load_config()
     return SettingsResponse(
-        server=server_section,
-        launch=launch_section,
+        server=_build_server_section(cfg, request),
+        launch=_build_launch_section(cfg),
         sender=cfg.get("sender", {}),
-        ai=ai_section,
+        ai=_build_ai_section(cfg),
         quick_overlay=cfg.get("quick_overlay", {}),
     )
+
 
 
 @router.get("/desktop-window", response_model=DesktopWindowStateResponse)

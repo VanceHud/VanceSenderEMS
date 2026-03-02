@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import importlib
+import logging
 import multiprocessing
 import os
 import sys
@@ -39,6 +40,8 @@ from app.core.desktop_shell import (
 from app.core.network import get_lan_ipv4_addresses
 from app.core.public_config import fetch_github_public_config_sync
 from app.core.runtime_paths import get_bundle_root
+
+_log = logging.getLogger(__name__)
 
 WEB_DIR = get_bundle_root() / "app" / "web"
 
@@ -79,7 +82,7 @@ def _install_asyncio_exception_filter() -> None:
     loop.set_exception_handler(_exception_handler)
 
 
-def create_app() -> FastAPI:
+def create_app(lan_access: bool = False) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         _install_asyncio_exception_filter()
@@ -92,10 +95,15 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS — allow LAN devices
+    # CORS — restrict origins in local-only mode, open for LAN
+    cors_origins = ["*"] if lan_access else [
+        "http://127.0.0.1",
+        "http://localhost",
+    ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
+        allow_origin_regex=r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$" if not lan_access else None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -115,7 +123,16 @@ def create_app() -> FastAPI:
     return app
 
 
-app = create_app()
+def _read_initial_lan_access() -> bool:
+    """Read LAN access flag from config for CORS initialization."""
+    try:
+        cfg = load_config()
+        return bool(cfg.get("server", {}).get("lan_access", False))
+    except Exception:
+        return False
+
+
+app = create_app(lan_access=_read_initial_lan_access())
 
 _DEVNULL_STREAMS: list[object] = []
 _CONSOLE_STREAMS: list[object] = []
@@ -330,7 +347,7 @@ def _ensure_startup_port_available(host: str, port: int) -> bool:
         port_guard_module = importlib.import_module("app.core.port_guard")
     except ModuleNotFoundError as exc:
         if exc.name == "app.core.port_guard":
-            print("⚠ 端口占用检测模块缺失，已跳过启动前端口检查。")
+            _log.warning("端口占用检测模块缺失，已跳过启动前端口检查。")
             return True
         raise
 
@@ -419,7 +436,7 @@ def main() -> None:
         if quick_overlay_module is not None:
             quick_overlay_module.start()
     except Exception as exc:
-        print(f"⚠ 快捷悬浮窗模块启动失败: {exc}")
+        _log.warning("快捷悬浮窗模块启动失败: %s", exc)
 
 
     if use_desktop_shell:
@@ -454,68 +471,58 @@ def main() -> None:
     tray_supported = has_system_tray_support()
     ui_mode_text = "桌面内嵌窗口" if use_desktop_shell else "浏览器模式"
 
-    print(f"""
-╔══════════════════════════════════════════════╗
-║           {APP_NAME} v{APP_VERSION}                 ║
-║  FiveM /me /do 文本发送器 & AI生成工具       ║
-╠══════════════════════════════════════════════╣
-║  UI模式:   {ui_mode_text:<32}║
-║  本地访问:  http://127.0.0.1:{port:<5}            ║
-║  API文档:   http://127.0.0.1:{port:<5}/docs       ║""")
+    _log.info("""\n╔══════════════════════════════════════════════╗\n║           %s v%s                 ║\n║  FiveM /me /do 文本发送器 & AI生成工具       ║\n╠══════════════════════════════════════════════╣\n║  UI模式:   %-32s║\n║  本地访问:  http://127.0.0.1:%-5d            ║\n║  API文档:   http://127.0.0.1:%-5d/docs       ║""",
+        APP_NAME, APP_VERSION, ui_mode_text, port, port)
 
     if runtime_lan_access:
         if lan_url_list:
             for index, lan_url in enumerate(lan_url_list):
                 suffix = "" if len(lan_url_list) == 1 else str(index + 1)
-                print(f"║  局域网{suffix}:   {lan_url}")
-                print(f"║  LAN文档{suffix}:  {lan_docs_url_list[index]}")
+                _log.info("║  局域网%s:   %s", suffix, lan_url)
+                _log.info("║  LAN文档%s:  %s", suffix, lan_docs_url_list[index])
         else:
-            print(f"║  局域网:    http://<your-ip>:{port:<5}           ║")
+            _log.info("║  局域网:    http://<your-ip>:%-5d           ║", port)
 
     if server_token:
         masked = server_token[:4] + "*" * min(8, len(server_token) - 4)
-        print(f"║  认证:     Token {masked}")
+        _log.info("║  认证:     Token %s", masked)
     else:
-        print(f"║  认证:     未启用")
-    print(f"║  浏览器启动: {'开启' if open_webui_on_start else '关闭'}")
-    print(f"║  控制台日志: {'开启' if show_console_on_start else '关闭'}")
-    print(f"║  启动托盘: {'开启' if enable_tray_on_start else '关闭'}")
-    print(f"║  托盘支持: {'可用' if tray_supported else '不可用'}")
+        _log.info("║  认证:     未启用")
+    _log.info("║  浏览器启动: %s", '开启' if open_webui_on_start else '关闭')
+    _log.info("║  控制台日志: %s", '开启' if show_console_on_start else '关闭')
+    _log.info("║  启动托盘: %s", '开启' if enable_tray_on_start else '关闭')
+    _log.info("║  托盘支持: %s", '可用' if tray_supported else '不可用')
     if not args.no_webview and not webview_available:
-        print(f"║  提示:     未检测到 pywebview，已回退浏览器模式")
+        _log.info("║  提示:     未检测到 pywebview，已回退浏览器模式")
     if enable_tray_on_start and not tray_supported:
-        print("║  提示:     未检测到系统托盘依赖，将禁用托盘驻留")
+        _log.info("║  提示:     未检测到系统托盘依赖，将禁用托盘驻留")
 
-    print(f"║  GitHub:   {github_repository_url}")
-    print(f"╚══════════════════════════════════════════════╝")
-    print()
+    _log.info("║  GitHub:   %s", github_repository_url)
+    _log.info("╚══════════════════════════════════════════════╝")
 
     if public_config_result.visible and public_config_result.content:
         if public_config_result.title:
-            print(f"📢 {public_config_result.title}")
+            _log.info("📢 %s", public_config_result.title)
         else:
-            print("📢 远程公告")
+            _log.info("📢 远程公告")
 
         for line in public_config_result.content.splitlines():
-            print(f"  {line}")
+            _log.info("  %s", line)
 
         if public_config_result.link_url:
             link_text = public_config_result.link_text or "查看详情"
-            print(f"  {link_text}: {public_config_result.link_url}")
-
-        print()
+            _log.info("  %s: %s", link_text, public_config_result.link_url)
 
     if runtime_lan_access and not server_token:
-        print("⚠ 风险提示: 当前已开启局域网访问且未设置 Token。")
-        print("  局域网内任意设备都可访问 API，建议尽快设置 Token 并重启服务。")
-        print()
+        _log.warning("风险提示: 当前已开启局域网访问且未设置 Token。")
+        _log.warning("  局域网内任意设备都可访问 API，建议尽快设置 Token 并重启服务。")
 
     try:
         if use_desktop_shell:
             try:
                 server, server_thread = _start_uvicorn_in_background(host, port)
             except RuntimeError as exc:
-                print(f"⚠ {exc}，将回退为浏览器模式。")
+                _log.warning("%s，将回退为浏览器模式。", exc)
             else:
                 if startup_browser_urls:
                     _open_urls_in_browser(startup_browser_urls)
@@ -529,7 +536,7 @@ def main() -> None:
                 if opened:
                     return
 
-                print("⚠ 内嵌窗口启动失败，将回退为浏览器模式。")
+                _log.warning("内嵌窗口启动失败，将回退为浏览器模式。")
 
         if startup_browser_urls:
             _open_urls_in_browser(startup_browser_urls)
@@ -546,6 +553,23 @@ def main() -> None:
 
         if quick_overlay_module is not None:
             quick_overlay_module.stop()
+
+        # Clean up runtime streams to avoid resource leaks
+        for stream in _CONSOLE_STREAMS:
+            try:
+                if hasattr(stream, 'close'):
+                    stream.close()
+            except Exception:
+                pass
+        _CONSOLE_STREAMS.clear()
+
+        for stream in _DEVNULL_STREAMS:
+            try:
+                if hasattr(stream, 'close'):
+                    stream.close()
+            except Exception:
+                pass
+        _DEVNULL_STREAMS.clear()
 
 
 if __name__ == "__main__":

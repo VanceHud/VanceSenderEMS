@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from typing import Any, AsyncIterator
 
 from openai import AsyncOpenAI
@@ -40,23 +41,86 @@ _REWRITE_SYSTEM_PROMPT = (
 )
 
 
+
+# ── Client cache (keyed by api_base + api_key + custom_headers hash) ────────
+
+_client_cache_lock = threading.Lock()
+_client_cache: dict[str, AsyncOpenAI] = {}
+
+
+def _client_cache_key(provider: dict[str, Any], custom_headers: dict[str, str] | None) -> str:
+    """Build a deterministic cache key for a provider + header combo."""
+    api_base = provider.get("api_base", "")
+    api_key = provider.get("api_key", "")
+    header_str = json.dumps(custom_headers, sort_keys=True) if custom_headers else ""
+    return f"{api_base}|{api_key}|{header_str}"
+
+
 def _build_client(
     provider: dict[str, Any], cfg: dict[str, Any] | None = None
 ) -> AsyncOpenAI:
-    """Create an AsyncOpenAI client for a given provider config.
+    """Return a cached AsyncOpenAI client for a given provider config.
 
-    Applies ``ai.custom_headers`` from *cfg* so that callers can override the
-    default SDK fingerprint headers (User-Agent, X-Stainless-*) which are
-    blocked by some third-party API gateways / WAFs.
+    Clients are cached per unique (api_base, api_key, custom_headers)
+    combination to avoid creating short-lived connections on every request.
     """
     if cfg is None:
         cfg = load_config()
     custom_headers = cfg.get("ai", {}).get("custom_headers") or {}
-    return AsyncOpenAI(
+    key = _client_cache_key(provider, custom_headers or None)
+
+    with _client_cache_lock:
+        cached = _client_cache.get(key)
+        if cached is not None:
+            return cached
+
+    client = AsyncOpenAI(
         api_key=provider.get("api_key") or "unused",
         base_url=provider.get("api_base", ""),
         default_headers=custom_headers if custom_headers else None,
     )
+
+    with _client_cache_lock:
+        _client_cache[key] = client
+
+    return client
+
+
+# ── Shared error detail extraction ─────────────────────────────────────
+
+
+def extract_api_error_details(
+    exc: Exception, *, provider_id: str | None = None
+) -> dict[str, object]:
+    """Extract structured error details from an API/AI exception.
+
+    Used by both AI routes and test_provider to avoid duplicated logic.
+    """
+    detail: dict[str, object] = {
+        "message": str(exc),
+        "error_type": type(exc).__name__,
+    }
+    if provider_id:
+        detail["provider_id"] = provider_id
+
+    for key in ("status_code", "request_id", "code", "type", "param"):
+        value = getattr(exc, key, None)
+        if value is not None:
+            detail[key] = value
+
+    body = getattr(exc, "body", None)
+    if body is not None:
+        detail["body"] = (
+            body if isinstance(body, (str, int, float, bool, dict, list)) else str(body)
+        )
+
+    response = getattr(exc, "response", None)
+    if response is not None:
+        response_status = getattr(response, "status_code", None)
+        if response_status is not None:
+            detail["response_status"] = response_status
+
+    return detail
 
 
 def _get_system_prompt(cfg: dict[str, Any] | None = None) -> str:
@@ -190,23 +254,8 @@ async def test_provider(provider_id: str) -> dict[str, Any]:
         )
         return {"success": True, "response": resp.choices[0].message.content}
     except Exception as exc:
-        detail: dict[str, Any] = {
-            "success": False,
-            "error": str(exc),
-            "error_type": type(exc).__name__,
-        }
-        for key in ("status_code", "request_id", "code", "type", "param"):
-            value = getattr(exc, key, None)
-            if value is not None:
-                detail[key] = value
-        body = getattr(exc, "body", None)
-        if body is not None:
-            detail["body"] = (
-                body
-                if isinstance(body, (str, int, float, bool, dict, list))
-                else str(body)
-            )
-        return detail
+        detail = extract_api_error_details(exc)
+        return {"success": False, **detail}
 
 
 async def rewrite_texts(
