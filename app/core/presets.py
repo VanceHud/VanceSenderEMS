@@ -94,16 +94,27 @@ def write_preset(preset_id: str, data: dict[str, Any]) -> None:
         raise PresetError(f"预设文件写入失败: {exc}", status_code=500) from exc
 
 
-def list_all_presets() -> list[dict[str, Any]]:
-    """List all presets sorted by filename."""
+def list_all_presets(*, tag_filter: str | None = None) -> list[dict[str, Any]]:
+    """List all presets sorted by sort_order then name.
+
+    If *tag_filter* is given, only presets containing that tag are returned.
+    """
     PRESETS_DIR.mkdir(parents=True, exist_ok=True)
     presets: list[dict[str, Any]] = []
     for fp in sorted(PRESETS_DIR.glob("*.json")):
         try:
             with open(fp, "r", encoding="utf-8") as f:
-                presets.append(json.load(f))
+                data = json.load(f)
         except (json.JSONDecodeError, KeyError):
             continue
+
+        if tag_filter and tag_filter not in data.get("tags", []):
+            continue
+
+        presets.append(data)
+
+    # Sort by sort_order (ascending), then by name
+    presets.sort(key=lambda p: (p.get("sort_order", 0), p.get("name", "")))
     return presets
 
 

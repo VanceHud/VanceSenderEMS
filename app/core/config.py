@@ -219,6 +219,11 @@ def _default_config() -> dict[str, Any]:
             "trigger_hotkey": "f7",
             "mouse_side_button": "",
             "poll_interval_ms": 40,
+            "theme": {
+                "bg_opacity": 0.92,
+                "accent_color": "#7c5cff",
+                "font_size": 12,
+            },
         },
         "public_config": {
             "source_url": "",

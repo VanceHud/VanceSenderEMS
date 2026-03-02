@@ -18,17 +18,23 @@ class TextLine(BaseModel):
 class PresetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     texts: list[TextLine] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list, max_length=10)
+    sort_order: int = 0
 
 
 class PresetUpdate(BaseModel):
     name: str | None = None
     texts: list[TextLine] | None = None
+    tags: list[str] | None = None
+    sort_order: int | None = None
 
 
 class PresetResponse(BaseModel):
     id: str
     name: str
     texts: list[TextLine]
+    tags: list[str] = Field(default_factory=list)
+    sort_order: int = 0
     created_at: str
     updated_at: str
 
@@ -307,6 +313,16 @@ class PublicConfigResponse(BaseModel):
     link_text: str | None = None
     error_type: str | None = None
     status_code: int | None = None
+
+
+# ── Preset import/export ───────────────────────────────────────────────────
+
+
+class PresetImportResponse(BaseModel):
+    imported: int = Field(description="成功导入的预设数量")
+    skipped: int = Field(description="跳过的预设数量（格式不合法等）")
+    errors: list[str] = Field(default_factory=list, description="导入过程中的错误信息")
+    message: str
 
 
 # ── Generic ────────────────────────────────────────────────────────────────

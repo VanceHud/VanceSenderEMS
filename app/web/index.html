@@ -85,7 +85,7 @@
                             <path d="M9 20v-5h6v5"></path>
                         </svg>
                     </span>
-                    <span class="label">首页</span>
+                    <span class="label" data-i18n="nav.home">首页</span>
                 </li>
                 <li class="nav-item" data-target="panel-send">
                     <span class="icon">
@@ -94,7 +94,7 @@
                             <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
                         </svg>
                     </span>
-                    <span class="label">发送</span>
+                    <span class="label" data-i18n="nav.send">发送</span>
                 </li>
                 <li class="nav-item" data-target="panel-quick-send">
                     <span class="icon">
@@ -103,7 +103,7 @@
                             <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"></path>
                         </svg>
                     </span>
-                    <span class="label">快捷发送</span>
+                    <span class="label" data-i18n="nav.quickSend">快捷发送</span>
                 </li>
                 <li class="nav-item" data-target="panel-ai">
                     <span class="icon">
@@ -114,7 +114,7 @@
                             <path d="M12 12l4.5 7.8"></path>
                         </svg>
                     </span>
-                    <span class="label">AI生成</span>
+                    <span class="label" data-i18n="nav.ai">AI生成</span>
                 </li>
                 <li class="nav-item" data-target="panel-presets">
                     <span class="icon">
@@ -125,7 +125,7 @@
                             <polyline points="7 3 7 8 15 8"></polyline>
                         </svg>
                     </span>
-                    <span class="label">预设</span>
+                    <span class="label" data-i18n="nav.presets">预设</span>
                 </li>
                 <li class="nav-item" data-target="panel-settings">
                     <span class="icon">
@@ -137,7 +137,7 @@
                             </path>
                         </svg>
                     </span>
-                    <span class="label">设置</span>
+                    <span class="label" data-i18n="nav.settings">设置</span>
                 </li>
             </ul>
         </nav>
@@ -229,7 +229,8 @@
                                     <label for="home-lan-ip-select">切换 IP</label>
                                     <select id="home-lan-ip-select"></select>
                                 </div>
-                                <button id="home-copy-lan-btn" class="btn btn-sm btn-secondary" type="button">复制局域网地址</button>
+                                <button id="home-copy-lan-btn" class="btn btn-sm btn-secondary"
+                                    type="button">复制局域网地址</button>
                             </div>
                             <p class="desc">局域网访问开启后可用同一局域网(WIFI)下的设备进行远程控制。建议设置 Token 保护局域网访问安全。</p>
                         </div>
@@ -305,6 +306,39 @@
                         <div id="home-public-config-content" class="public-config-content"></div>
                         <a id="home-public-config-link" class="btn btn-sm btn-ghost hidden section-inline-link" href="#"
                             rel="noopener noreferrer" target="_blank">查看详情</a>
+                    </div>
+
+                    <div class="glass-card home-card" style="--anim-delay: 0.45s">
+                        <h2>
+                            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M18 20V10"></path>
+                                <path d="M12 20V4"></path>
+                                <path d="M6 20v-6"></path>
+                            </svg>
+                            发送统计
+                        </h2>
+                        <div id="stats-dashboard" class="stats-dashboard">
+                            <div class="stats-grid">
+                                <div class="stats-metric">
+                                    <span class="stats-value" id="stats-total-sent">0</span>
+                                    <span class="stats-label">总发送</span>
+                                </div>
+                                <div class="stats-metric">
+                                    <span class="stats-value" id="stats-success-rate">0%</span>
+                                    <span class="stats-label">成功率</span>
+                                </div>
+                                <div class="stats-metric">
+                                    <span class="stats-value" id="stats-total-batches">0</span>
+                                    <span class="stats-label">批量发送</span>
+                                </div>
+                                <div class="stats-metric">
+                                    <span class="stats-value" id="stats-total-failed">0</span>
+                                    <span class="stats-label">失败数</span>
+                                </div>
+                            </div>
+                            <div id="stats-presets-list" class="stats-presets-list"></div>
+                        </div>
                     </div>
 
                 </div>
@@ -386,6 +420,23 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Send History (collapsible) -->
+                <details class="send-history-section glass-card" id="send-history-section">
+                    <summary class="send-history-toggle">
+                        📋 发送历史
+                        <span id="send-history-count" class="history-count-badge"></span>
+                    </summary>
+                    <div class="send-history-actions">
+                        <button id="refresh-history-btn" class="btn btn-sm btn-ghost" type="button">刷新</button>
+                        <button id="clear-history-btn" class="btn btn-sm btn-ghost" type="button">清空</button>
+                    </div>
+                    <div id="send-history-list" class="send-history-list">
+                        <div class="empty-state small">
+                            <p>暂无发送记录</p>
+                        </div>
+                    </div>
+                </details>
             </section>
 
             <!-- Panel 2: Quick Send -->
@@ -424,6 +475,14 @@
 
                 <div class="ai-container">
                     <div class="glass-card ai-form">
+                        <div class="form-group">
+                            <label>场景模板 <span class="hint"
+                                    style="font-weight:400;font-size:0.8rem;color:var(--text-muted)">点击一键填充</span></label>
+                            <div id="scene-templates-bar" class="scene-templates-bar">
+                                <!-- Templates rendered by JS -->
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <label>场景描述</label>
                             <textarea id="ai-scenario" placeholder="描述你想要生成的角色扮演场景，例如：'一个愤怒的黑帮老大正在审问叛徒'..."
@@ -486,24 +545,49 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- AI Generation History (collapsible) -->
+                <details class="ai-history-section glass-card" id="ai-history-section">
+                    <summary class="ai-history-toggle send-history-toggle">
+                        📜 生成历史
+                        <span id="ai-history-count" class="history-count-badge"></span>
+                    </summary>
+                    <div class="send-history-actions">
+                        <button id="refresh-ai-history-btn" class="btn btn-sm btn-ghost" type="button">刷新</button>
+                        <button id="clear-ai-history-btn" class="btn btn-sm btn-ghost" type="button">清空非收藏</button>
+                    </div>
+                    <div id="ai-history-list" class="ai-history-list">
+                        <div class="empty-state small">
+                            <p>暂无生成记录</p>
+                        </div>
+                    </div>
+                </details>
             </section>
 
             <!-- Panel 4: Presets -->
             <section id="panel-presets" class="panel">
                 <header class="panel-header">
                     <h1>预设管理</h1>
-                    <button id="refresh-presets-btn" class="btn btn-icon" type="button">
-                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2"
-                            fill="none">
-                            <title>刷新预设</title>
-                            <path d="M23 4v6h-6"></path>
-                            <path d="M1 20v-6h6"></path>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                        </svg>
-                    </button>
+                    <div class="header-actions">
+                        <button id="import-presets-btn" class="btn btn-secondary" type="button">导入预设</button>
+                        <button id="export-all-presets-btn" class="btn btn-ghost" type="button">全部导出</button>
+                        <button id="refresh-presets-btn" class="btn btn-icon" type="button">
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2"
+                                fill="none">
+                                <title>刷新预设</title>
+                                <path d="M23 4v6h-6"></path>
+                                <path d="M1 20v-6h6"></path>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <input type="file" id="preset-file-input" accept=".json" class="hidden" aria-hidden="true">
                 </header>
 
                 <div class="presets-container">
+                    <div id="preset-tag-filter" class="preset-tag-filter-bar">
+                        <!-- Tag filter pills rendered by JS -->
+                    </div>
                     <div id="presets-grid" class="presets-grid">
                         <!-- Presets injected here -->
                         <div class="loading-spinner"></div>
@@ -514,10 +598,15 @@
             <!-- Panel 5: Settings -->
             <section id="panel-settings" class="panel">
                 <header class="panel-header">
-                    <h1>设置</h1>
+                    <h1 data-i18n="settings.title">设置</h1>
                     <div class="header-actions">
-
-                        <button id="save-settings-btn" class="btn btn-primary" type="button">保存全部设置</button>
+                        <select id="setting-language"
+                            style="margin-right:8px;padding:6px 10px;border-radius:8px;background:var(--glass-bg);color:var(--text-main);border:1px solid var(--glass-border);font-size:0.85rem">
+                            <option value="zh-CN">中文</option>
+                            <option value="en">English</option>
+                        </select>
+                        <button id="save-settings-btn" class="btn btn-primary" type="button"
+                            data-i18n="settings.save">保存全部设置</button>
                     </div>
                 </header>
 
@@ -731,6 +820,24 @@
                                 <label>轮询间隔 (ms)</label>
                                 <input type="number" id="setting-overlay-poll-interval-ms" value="40" min="20"
                                     max="200">
+                            </div>
+                        </div>
+                        <h3 style="margin-top:16px;font-size:0.95rem;color:var(--text-secondary)">悬浮窗外观</h3>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>背景透明度 <span id="overlay-opacity-value"
+                                        style="color:var(--accent-cyan)">0.92</span></label>
+                                <input type="range" id="setting-overlay-bg-opacity" min="0.1" max="1" step="0.05"
+                                    value="0.92">
+                            </div>
+                            <div class="form-group">
+                                <label>主题色</label>
+                                <input type="color" id="setting-overlay-accent-color" value="#7c5cff">
+                            </div>
+                            <div class="form-group">
+                                <label>字体大小</label>
+                                <input type="number" id="setting-overlay-font-size" value="12" min="8" max="20"
+                                    step="1">
                             </div>
                         </div>
                     </div>
@@ -957,6 +1064,7 @@
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
+    <script src="/static/js/i18n.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 

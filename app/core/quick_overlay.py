@@ -242,21 +242,37 @@ class QuickOverlayModule:
         self._success_color = "#36d487"
         self._danger_color = "#ff8aa3"
 
+        # Apply custom theme from config
+        theme_cfg = overlay_cfg.get("theme", {})
+        if isinstance(theme_cfg, dict):
+            self._bg_opacity = max(0.1, min(1.0, float(theme_cfg.get("bg_opacity", 0.92) or 0.92)))
+            custom_accent = str(theme_cfg.get("accent_color", "") or "").strip()
+            if custom_accent and custom_accent.startswith("#"):
+                self._accent_secondary = custom_accent
+            custom_font_size = int(theme_cfg.get("font_size", 0) or 0)
+            if custom_font_size > 0:
+                font_delta = custom_font_size - 12  # 12 is the baseline
+            else:
+                font_delta = 0
+        else:
+            self._bg_opacity = 0.92
+            font_delta = 0
+
         self._popup_width = 460 if self._compact_mode else 560
         self._popup_height = 420 if self._compact_mode else 500
         self._frame_padx = 12 if self._compact_mode else 16
         self._frame_pady = 10 if self._compact_mode else 14
-        self._title_font_size = 13 if self._compact_mode else 15
-        self._subtitle_font_size = 9 if self._compact_mode else 10
+        self._title_font_size = (13 if self._compact_mode else 15) + font_delta
+        self._subtitle_font_size = (9 if self._compact_mode else 10) + font_delta
         self._combo_width = 33 if self._compact_mode else 40
-        self._list_font_size = 9 if self._compact_mode else 10
-        self._button_font_size = 9 if self._compact_mode else 10
+        self._list_font_size = (9 if self._compact_mode else 10) + font_delta
+        self._button_font_size = (9 if self._compact_mode else 10) + font_delta
         self._button_padx = 10 if self._compact_mode else 14
         self._button_pady = 8 if self._compact_mode else 10
-        self._hint_font_size = 8 if self._compact_mode else 9
+        self._hint_font_size = (8 if self._compact_mode else 9) + font_delta
 
-        self._status_tag_font_size = 8 if self._compact_mode else 9
-        self._status_text_font_size = 9 if self._compact_mode else 10
+        self._status_tag_font_size = (8 if self._compact_mode else 9) + font_delta
+        self._status_text_font_size = (9 if self._compact_mode else 10) + font_delta
         self._status_wrap_default = 320 if self._compact_mode else 360
         self._status_min_width = 300 if self._compact_mode else 340
         self._status_base_width = 270 if self._compact_mode else 300
@@ -367,7 +383,7 @@ class QuickOverlayModule:
         popup.resizable(False, False)
         popup.configure(bg=self._popup_bg)
         popup.attributes("-topmost", True)
-        popup.attributes("-alpha", 0.985)
+        popup.attributes("-alpha", self._bg_opacity)
         popup.withdraw()
         popup.protocol("WM_DELETE_WINDOW", lambda: self._hide_popup(restore_focus=True))
         popup.bind("<Escape>", lambda _e: self._hide_popup(restore_focus=True))

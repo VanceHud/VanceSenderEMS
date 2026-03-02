@@ -10,6 +10,7 @@ from app.api.schemas import (
     AIGenerateResponse,
     AIRewriteRequest,
     AIRewriteResponse,
+    MessageResponse,
     ProviderTestResponse,
     TextLine,
 )
@@ -19,6 +20,13 @@ from app.core.ai_client import (
     generate_texts_stream,
     rewrite_texts,
     test_provider,
+)
+from app.core.ai_history import (
+    save_generation,
+    list_history as list_ai_history,
+    toggle_star,
+    delete_entry,
+    clear_unstarred,
 )
 
 
@@ -66,6 +74,18 @@ async def ai_generate(body: AIGenerateRequest):
 
         if len(validated_texts) == 0:
             raise RuntimeError("AI返回内容格式异常，未解析到有效文本。")
+
+        # Save to AI generation history
+        try:
+            save_generation(
+                scenario=body.scenario,
+                style=body.style or "",
+                text_type=body.text_type or "mixed",
+                provider_id=resolved_pid,
+                texts=[t.model_dump() for t in validated_texts],
+            )
+        except Exception:
+            pass  # Don't fail the main request if history save fails
 
         return AIGenerateResponse(
             texts=validated_texts,
@@ -196,3 +216,37 @@ async def test_ai_provider(provider_id: str):
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+# ── AI Generation History ──────────────────────────────────────────────────
+
+
+@router.get("/history")
+async def get_ai_history(limit: int = 20, offset: int = 0):
+    """获取AI生成历史。"""
+    items, total = list_ai_history(limit=limit, offset=offset)
+    return {"items": items, "total": total}
+
+
+@router.post("/history/{gen_id}/star")
+async def star_ai_history(gen_id: str):
+    """切换收藏状态。"""
+    result = toggle_star(gen_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return result
+
+
+@router.delete("/history/{gen_id}", response_model=MessageResponse)
+async def delete_ai_history(gen_id: str):
+    """删除单条AI生成历史。"""
+    if delete_entry(gen_id):
+        return MessageResponse(message="已删除")
+    raise HTTPException(status_code=404, detail="记录不存在")
+
+
+@router.delete("/history", response_model=MessageResponse)
+async def clear_ai_history():
+    """清空非收藏AI生成历史。"""
+    count = clear_unstarred()
+    return MessageResponse(message=f"已清空 {count} 条非收藏记录")

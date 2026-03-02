@@ -741,6 +741,9 @@ const dom = {
     saveCurrentPresetBtn: document.getElementById('save-current-preset-btn'),
     presetUnsavedHint: document.getElementById('preset-unsaved-hint'),
     refreshPresetsBtn: document.getElementById('refresh-presets-btn'),
+    importPresetsBtn: document.getElementById('import-presets-btn'),
+    exportAllPresetsBtn: document.getElementById('export-all-presets-btn'),
+    presetFileInput: document.getElementById('preset-file-input'),
     quickPresetSelect: document.getElementById('quick-preset-select'),
     quickPresetRefreshBtn: document.getElementById('quick-preset-refresh-btn'),
 
@@ -806,6 +809,9 @@ const dom = {
     settingOverlayCaptureHotkeyBtn: document.getElementById('setting-overlay-capture-hotkey-btn'),
     settingOverlayMouseSideButton: document.getElementById('setting-overlay-mouse-side-button'),
     settingOverlayPollIntervalMs: document.getElementById('setting-overlay-poll-interval-ms'),
+    settingOverlayBgOpacity: document.getElementById('setting-overlay-bg-opacity'),
+    settingOverlayAccentColor: document.getElementById('setting-overlay-accent-color'),
+    settingOverlayFontSize: document.getElementById('setting-overlay-font-size'),
     settingSystemPrompt: document.getElementById('setting-system-prompt'),
     settingToken: document.getElementById('setting-token'),
     settingCustomHeaders: document.getElementById('setting-custom-headers'),
@@ -882,6 +888,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     initAIRewriteModal();
     initAIComparisonModal();
     initPresetsPanel();
+    initSendHistory();
+    initAIHistory();
+
+    // i18n: set language selector to saved language and wire up change
+    const langSelect = document.getElementById('setting-language');
+    if (langSelect) {
+        langSelect.value = getCurrentLang();
+        langSelect.addEventListener('change', () => setLanguage(langSelect.value));
+    }
+    applyLanguage();
+
     initSettingsPanel();
     initAuth();
 
@@ -907,7 +924,8 @@ async function loadInitialData() {
         await Promise.all([
             fetchSettings(),
             fetchPresets(),
-            fetchPublicConfig({ silent: true })
+            fetchPublicConfig({ silent: true }),
+            loadSendStats()
         ]);
         showToast('系统已就绪', 'success');
 
@@ -2411,8 +2429,267 @@ function resetSendState() {
     });
 }
 
+// --- AI Generation History ---
+function initAIHistory() {
+    const section = document.getElementById('ai-history-section');
+    const refreshBtn = document.getElementById('refresh-ai-history-btn');
+    const clearBtn = document.getElementById('clear-ai-history-btn');
+
+    if (section) section.addEventListener('toggle', () => { if (section.open) loadAIHistory(); });
+    if (refreshBtn) refreshBtn.addEventListener('click', loadAIHistory);
+    if (clearBtn) clearBtn.addEventListener('click', clearAIHistory);
+}
+
+async function loadAIHistory() {
+    const list = document.getElementById('ai-history-list');
+    const badge = document.getElementById('ai-history-count');
+    if (!list) return;
+
+    list.innerHTML = '<div class="loading-spinner"></div>';
+    try {
+        const res = await apiFetch('/api/v1/ai/history?limit=20');
+        const data = await res.json();
+        const items = data.items || [];
+        if (badge) badge.textContent = data.total > 0 ? data.total : '';
+
+        if (items.length === 0) {
+            list.innerHTML = '<div class="empty-state small"><p>暂无生成记录</p></div>';
+            return;
+        }
+
+        list.innerHTML = '';
+        items.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'ai-history-item';
+            const time = new Date(item.timestamp).toLocaleString();
+            const starClass = item.starred ? 'starred' : '';
+            el.innerHTML = `
+                <div class="ai-history-item-header">
+                    <span class="ai-history-scenario" title="${item.scenario}">${item.scenario}</span>
+                    <span class="history-time">${time}</span>
+                </div>
+                <div class="ai-history-item-meta">
+                    <span class="preset-tag-badge">${item.text_type || 'mixed'}</span>
+                    <span class="ai-history-text-count">${(item.texts || []).length} 条文本</span>
+                </div>
+                <div class="ai-history-item-actions">
+                    <button class="btn btn-sm btn-ghost ai-history-star ${starClass}" data-id="${item.id}" type="button" title="收藏">${item.starred ? '⭐' : '☆'}</button>
+                    <button class="btn btn-sm btn-ghost ai-history-load" data-id="${item.id}" type="button" title="导入到发送列表">📥 导入</button>
+                    <button class="btn btn-sm btn-ghost ai-history-delete" data-id="${item.id}" type="button" title="删除">🗑️</button>
+                </div>
+            `;
+
+            // Star toggle
+            el.querySelector('.ai-history-star').addEventListener('click', async () => {
+                try {
+                    await apiFetch(`/api/v1/ai/history/${item.id}/star`, { method: 'POST' });
+                    loadAIHistory();
+                } catch (e) { }
+            });
+
+            // Load/import texts
+            el.querySelector('.ai-history-load').addEventListener('click', () => {
+                if (item.texts && item.texts.length > 0) {
+                    state.texts = item.texts.map(t => ({ type: t.type || 'me', content: t.content || '' }));
+                    renderTextList();
+                    showToast(`已导入 ${item.texts.length} 条文本`, 'success');
+                }
+            });
+
+            // Delete
+            el.querySelector('.ai-history-delete').addEventListener('click', async () => {
+                try {
+                    await apiFetch(`/api/v1/ai/history/${item.id}`, { method: 'DELETE' });
+                    showToast('已删除', 'success');
+                    loadAIHistory();
+                } catch (e) { }
+            });
+
+            list.appendChild(el);
+        });
+    } catch (e) {
+        if (e.message !== 'AUTH_REQUIRED') {
+            list.innerHTML = '<div class="empty-state small"><p>加载失败</p></div>';
+        }
+    }
+}
+
+async function clearAIHistory() {
+    try {
+        await apiFetch('/api/v1/ai/history', { method: 'DELETE' });
+        showToast('非收藏记录已清空', 'success');
+        loadAIHistory();
+    } catch (e) {
+        if (e.message !== 'AUTH_REQUIRED') showToast('操作失败', 'error');
+    }
+}
+
+// --- Send Statistics ---
+async function loadSendStats() {
+    try {
+        const res = await apiFetch('/api/v1/stats');
+        const data = await res.json();
+
+        const totalEl = document.getElementById('stats-total-sent');
+        const rateEl = document.getElementById('stats-success-rate');
+        const batchEl = document.getElementById('stats-total-batches');
+        const failedEl = document.getElementById('stats-total-failed');
+        const presetsEl = document.getElementById('stats-presets-list');
+
+        if (totalEl) totalEl.textContent = data.total_sent || 0;
+        if (rateEl) rateEl.textContent = (data.success_rate || 0) + '%';
+        if (batchEl) batchEl.textContent = data.total_batches || 0;
+        if (failedEl) failedEl.textContent = data.total_failed || 0;
+
+        if (presetsEl && data.most_used_presets && data.most_used_presets.length > 0) {
+            presetsEl.innerHTML = '<div class="stats-presets-title">常用预设</div>' +
+                data.most_used_presets.map(p => `<div class="stats-preset-item"><span>${p.name}</span><span class="stats-preset-count">${p.count} 次</span></div>`).join('');
+        } else if (presetsEl) {
+            presetsEl.innerHTML = '';
+        }
+    } catch (e) {
+        // Silently fail — stats are optional
+    }
+}
+
+// --- Send History ---
+function initSendHistory() {
+    const section = document.getElementById('send-history-section');
+    const refreshBtn = document.getElementById('refresh-history-btn');
+    const clearBtn = document.getElementById('clear-history-btn');
+
+    if (section) {
+        section.addEventListener('toggle', () => {
+            if (section.open) loadSendHistory();
+        });
+    }
+    if (refreshBtn) refreshBtn.addEventListener('click', loadSendHistory);
+    if (clearBtn) clearBtn.addEventListener('click', clearSendHistory);
+}
+
+async function loadSendHistory() {
+    const list = document.getElementById('send-history-list');
+    const badge = document.getElementById('send-history-count');
+    if (!list) return;
+
+    list.innerHTML = '<div class="loading-spinner"></div>';
+    try {
+        const res = await apiFetch('/api/v1/send/history?limit=50');
+        const data = await res.json();
+        const items = data.items || [];
+        if (badge) badge.textContent = data.total > 0 ? data.total : '';
+
+        if (items.length === 0) {
+            list.innerHTML = '<div class="empty-state small"><p>暂无发送记录</p></div>';
+            return;
+        }
+
+        list.innerHTML = '';
+        items.forEach(item => {
+            const el = document.createElement('div');
+            el.className = `send-history-item ${item.success ? '' : 'failed'}`;
+            const time = new Date(item.timestamp).toLocaleTimeString();
+            const statusIcon = item.success ? '✅' : '❌';
+            const errorHtml = item.error ? `<span class="history-error">${item.error}</span>` : '';
+            el.innerHTML = `
+                <span class="history-status">${statusIcon}</span>
+                <span class="history-text" title="${item.text}">${item.text}</span>
+                ${errorHtml}
+                <span class="history-time">${time}</span>
+                <button class="btn btn-sm btn-ghost history-resend" type="button" title="重新发送">↻</button>
+            `;
+            const resendBtn = el.querySelector('.history-resend');
+            if (resendBtn) {
+                resendBtn.addEventListener('click', async () => {
+                    try {
+                        await apiFetch('/api/v1/send', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: item.text })
+                        });
+                        showToast('已重新发送', 'success');
+                        loadSendHistory();
+                    } catch (e) {
+                        if (e.message !== 'AUTH_REQUIRED') showToast('发送失败', 'error');
+                    }
+                });
+            }
+            list.appendChild(el);
+        });
+    } catch (e) {
+        if (e.message !== 'AUTH_REQUIRED') {
+            list.innerHTML = '<div class="empty-state small"><p>加载历史失败</p></div>';
+        }
+    }
+}
+
+async function clearSendHistory() {
+    try {
+        await apiFetch('/api/v1/send/history', { method: 'DELETE' });
+        showToast('发送历史已清空', 'success');
+        loadSendHistory();
+    } catch (e) {
+        if (e.message !== 'AUTH_REQUIRED') showToast('清空失败', 'error');
+    }
+}
+
+// --- AI Scene Templates ---
+const SCENE_TEMPLATES = [
+    { name: '交通检查', category: '执法', scenario: '一名警官在路边拦停一辆可疑车辆进行例行检查，要求驾驶员出示证件', style: '专业、严肃', textType: 'mixed' },
+    { name: '嫌疑人搜身', category: '执法', scenario: '警察将嫌疑人靠墙站立并进行搜身检查，搜出了可疑物品', style: '紧张、专业', textType: 'mixed' },
+    { name: '急救现场', category: '医疗', scenario: '急救人员赶到事故现场对一名受伤的市民进行紧急救治和伤口包扎', style: '紧张、专业', textType: 'mixed' },
+    { name: '医院问诊', category: '医疗', scenario: '医生在诊室中为患者做检查问诊，记录病历并给出治疗建议', style: '严谨、关切', textType: 'mixed' },
+    { name: '车辆维修', category: '生活', scenario: '技师在修车铺中检查和修理客户送来的一辆损坏的车辆', style: '细致、技术性', textType: 'mixed' },
+    { name: '餐厅用餐', category: '生活', scenario: '服务员在高档餐厅中接待客人点菜并送上美食', style: '优雅、热情', textType: 'mixed' },
+    { name: '钓鱼度假', category: '生活', scenario: '一个人坐在湖边安静地钓鱼，享受难得的假日时光', style: '悠闲、惬意', textType: 'mixed' },
+    { name: '黑帮审问', category: '犯罪', scenario: '一个愤怒的黑帮老大在废弃仓库中审问叛徒', style: '冷峻、压迫感', textType: 'mixed' },
+    { name: '毒品交易', category: '犯罪', scenario: '两帮人在偏僻停车场进行一笔紧张的毒品现金交易', style: '紧张、危险', textType: 'mixed' },
+    { name: '银行抢劫', category: '犯罪', scenario: '几名蒙面劫匪闯入银行大厅，挟持人质要求金库密码', style: '紧张、激烈', textType: 'mixed' },
+    { name: '商务谈判', category: '商业', scenario: '两家公司的代表在会议室进行一场重要的商务合作谈判', style: '正式、犀利', textType: 'mixed' },
+    { name: '房产交易', category: '商业', scenario: '房产经纪人带客户看房并介绍房源优势，促成签约', style: '热情、专业', textType: 'mixed' },
+];
+
+function renderSceneTemplates() {
+    const bar = document.getElementById('scene-templates-bar');
+    if (!bar) return;
+
+    // Group by category
+    const categories = {};
+    SCENE_TEMPLATES.forEach(t => {
+        if (!categories[t.category]) categories[t.category] = [];
+        categories[t.category].push(t);
+    });
+
+    bar.innerHTML = '';
+    for (const [cat, templates] of Object.entries(categories)) {
+        const group = document.createElement('div');
+        group.className = 'scene-template-group';
+        group.innerHTML = `<span class="scene-template-category">${cat}</span>`;
+        templates.forEach(t => {
+            const pill = document.createElement('button');
+            pill.type = 'button';
+            pill.className = 'btn btn-sm btn-outline scene-template-pill';
+            pill.textContent = t.name;
+            pill.title = t.scenario;
+            pill.addEventListener('click', () => applySceneTemplate(t));
+            group.appendChild(pill);
+        });
+        bar.appendChild(group);
+    }
+}
+
+function applySceneTemplate(template) {
+    if (dom.aiScenario) dom.aiScenario.value = template.scenario;
+    if (dom.aiStyle) dom.aiStyle.value = template.style || '';
+    // Set text type radio
+    const radio = document.querySelector(`input[name="ai-type"][value="${template.textType || 'mixed'}"]`);
+    if (radio) radio.checked = true;
+    showToast(`已应用模板「${template.name}」`, 'success');
+}
+
 // --- AI Panel Logic ---
 function initAIPanel() {
+    renderSceneTemplates();
     dom.aiGenerateBtn.addEventListener('click', generateAI);
     dom.aiImportBtn.addEventListener('click', () => {
         if (!Array.isArray(state.aiPreview) || state.aiPreview.length === 0) {
@@ -2638,6 +2915,88 @@ function renderAIPreview() {
 // --- Presets Panel Logic ---
 function initPresetsPanel() {
     dom.refreshPresetsBtn.addEventListener('click', fetchPresets);
+
+    // Import / Export
+    if (dom.importPresetsBtn) {
+        dom.importPresetsBtn.addEventListener('click', () => {
+            if (dom.presetFileInput) dom.presetFileInput.click();
+        });
+    }
+    if (dom.presetFileInput) {
+        dom.presetFileInput.addEventListener('change', importPresetsFromFile);
+    }
+    if (dom.exportAllPresetsBtn) {
+        dom.exportAllPresetsBtn.addEventListener('click', exportAllPresets);
+    }
+}
+
+async function importPresetsFromFile() {
+    const file = dom.presetFileInput && dom.presetFileInput.files[0];
+    if (!file) return;
+    try {
+        const text = await file.text();
+        let payload;
+        try {
+            payload = JSON.parse(text);
+        } catch {
+            showToast('文件不是有效的 JSON 格式', 'error');
+            return;
+        }
+        const res = await apiFetch('/api/v1/presets/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(data.message || `成功导入 ${data.imported} 个预设`, 'success');
+            await fetchPresets();
+        } else {
+            showToast(data.detail || '导入失败', 'error');
+        }
+    } catch (e) {
+        if (e.message !== 'AUTH_REQUIRED') showToast('导入预设失败', 'error');
+    } finally {
+        if (dom.presetFileInput) dom.presetFileInput.value = '';
+    }
+}
+
+async function exportAllPresets() {
+    try {
+        const res = await apiFetch('/api/v1/presets/export/all');
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'vancesender_presets.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('全部预设已导出', 'success');
+    } catch (e) {
+        if (e.message !== 'AUTH_REQUIRED') showToast('导出失败', 'error');
+    }
+}
+
+async function exportSinglePreset(presetId, presetName) {
+    try {
+        const res = await apiFetch(`/api/v1/presets/export/${presetId}`);
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `preset_${presetName || presetId}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`预设 "${presetName}" 已导出`, 'success');
+    } catch (e) {
+        if (e.message !== 'AUTH_REQUIRED') showToast('导出失败', 'error');
+    }
 }
 
 async function fetchPresets() {
@@ -2646,6 +3005,7 @@ async function fetchPresets() {
         const res = await apiFetch('/api/v1/presets');
         const data = await res.json();
         state.presets = Array.isArray(data) ? data : [];
+        renderPresetTagFilter(state.presets);
         renderPresets(state.presets);
         renderQuickPresetSwitcher();
         renderQuickSendPresetSwitcher();
@@ -2658,6 +3018,45 @@ async function fetchPresets() {
         dom.presetsGrid.innerHTML = '';
         return false;
     }
+}
+
+function renderPresetTagFilter(presets) {
+    const container = document.getElementById('preset-tag-filter');
+    if (!container) return;
+
+    // Collect all unique tags
+    const allTags = new Set();
+    presets.forEach(p => (p.tags || []).forEach(t => allTags.add(t)));
+
+    container.innerHTML = '';
+    if (allTags.size === 0) return;
+
+    // "All" pill
+    const allPill = document.createElement('button');
+    allPill.type = 'button';
+    allPill.className = 'btn btn-sm btn-outline tag-filter-pill active';
+    allPill.textContent = '全部';
+    allPill.addEventListener('click', () => {
+        state.activeTagFilter = null;
+        container.querySelectorAll('.tag-filter-pill').forEach(p => p.classList.remove('active'));
+        allPill.classList.add('active');
+        renderPresets(state.presets);
+    });
+    container.appendChild(allPill);
+
+    allTags.forEach(tag => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'btn btn-sm btn-outline tag-filter-pill';
+        pill.textContent = tag;
+        pill.addEventListener('click', () => {
+            state.activeTagFilter = tag;
+            container.querySelectorAll('.tag-filter-pill').forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            renderPresets(state.presets.filter(p => (p.tags || []).includes(tag)));
+        });
+        container.appendChild(pill);
+    });
 }
 
 function renderPresets(presets) {
@@ -2673,13 +3072,25 @@ function renderPresets(presets) {
     presets.forEach(p => {
         const el = document.createElement('div');
         el.className = 'preset-card glass-card';
+        el.draggable = true;
+        el.dataset.presetId = p.id;
+
+        // Build tags HTML
+        const tagsHtml = (p.tags && p.tags.length > 0)
+            ? `<div class="preset-tags">${p.tags.map(t => `<span class="preset-tag-badge">${t}</span>`).join('')}</div>`
+            : '';
+
         el.innerHTML = `
             <div class="preset-name">${p.name}</div>
+            ${tagsHtml}
             <div class="preset-meta">
                 <span>${p.texts.length} 条文本</span>
                 <span>${new Date(p.created_at).toLocaleDateString()}</span>
             </div>
             <div class="preset-card-actions">
+                <button class="export-preset btn btn-sm btn-ghost" data-id="${p.id}" data-name="${p.name}" type="button" title="导出此预设">
+                    📥 导出
+                </button>
                 <button class="rewrite-preset btn btn-sm btn-ghost" data-id="${p.id}" type="button" title="AI重写整套预设">
                     ✨ 重写
                 </button>
@@ -2691,8 +3102,8 @@ function renderPresets(presets) {
 
         // Add click listener for loading
         el.addEventListener('click', (e) => {
-            // Prevent if delete button was clicked
-            if (e.target.closest('.delete-preset') || e.target.closest('.rewrite-preset')) return;
+            // Prevent if action button was clicked
+            if (e.target.closest('.delete-preset') || e.target.closest('.rewrite-preset') || e.target.closest('.export-preset')) return;
             loadPreset(p);
         });
 
@@ -2702,11 +3113,56 @@ function renderPresets(presets) {
             window.openPresetRewrite(p.id);
         });
 
+        // Add export listener
+        const exportBtn = el.querySelector('.export-preset');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                exportSinglePreset(p.id, p.name);
+            });
+        }
+
         // Add delete listener
         const deleteBtn = el.querySelector('.delete-preset');
         deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             window.deletePreset(p.id, e);
+        });
+
+        // Drag and drop for reordering
+        el.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', p.id);
+            el.classList.add('dragging');
+        });
+        el.addEventListener('dragend', () => el.classList.remove('dragging'));
+        el.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            el.classList.add('drag-over');
+        });
+        el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+        el.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            el.classList.remove('drag-over');
+            const draggedId = e.dataTransfer.getData('text/plain');
+            if (draggedId === p.id) return;
+            // Reorder: moved item goes before dropped target
+            const ids = Array.from(dom.presetsGrid.querySelectorAll('.preset-card')).map(c => c.dataset.presetId);
+            const fromIdx = ids.indexOf(draggedId);
+            const toIdx = ids.indexOf(p.id);
+            if (fromIdx === -1 || toIdx === -1) return;
+            ids.splice(fromIdx, 1);
+            ids.splice(toIdx, 0, draggedId);
+            try {
+                await apiFetch('/api/v1/presets/reorder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                });
+                await fetchPresets();
+                showToast('预设顺序已更新', 'success');
+            } catch (err) {
+                if (err.message !== 'AUTH_REQUIRED') showToast('排序失败', 'error');
+            }
         });
 
         dom.presetsGrid.appendChild(el);
@@ -2790,9 +3246,9 @@ function renderQuickSendList() {
 
     if (!preset || !Array.isArray(preset.texts) || preset.texts.length === 0) {
         dom.quickSendList.innerHTML = `
-            <div class="empty-state small">
-                <p>当前预设暂无可发送文本</p>
-            </div>`;
+        < div class="empty-state small" >
+            <p>当前预设暂无可发送文本</p>
+            </div > `;
         return;
     }
 
@@ -2802,8 +3258,8 @@ function renderQuickSendList() {
         button.className = 'quick-send-item';
 
         const badge = document.createElement('span');
-        badge.className = `badge badge-${item.type}`;
-        badge.textContent = `/${item.type}`;
+        badge.className = `badge badge - ${item.type} `;
+        badge.textContent = `/ ${item.type} `;
 
         const content = document.createElement('span');
         content.className = 'quick-send-content';
@@ -2818,7 +3274,7 @@ function renderQuickSendList() {
         button.appendChild(action);
 
         button.addEventListener('click', async () => {
-            const textToSend = `/${item.type} ${item.content}`;
+            const textToSend = `/ ${item.type} ${item.content} `;
             button.disabled = true;
 
             const dismissed = await dismissQuickPanelForSend();
@@ -3053,7 +3509,7 @@ async function saveToCurrentPreset() {
     }
 
     try {
-        const res = await apiFetch(`/api/v1/presets/${state.currentPresetId}`, {
+        const res = await apiFetch(`/ api / v1 / presets / ${state.currentPresetId} `, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3082,7 +3538,7 @@ window.deletePreset = async (id, event) => {
     if (!confirm('确定删除此预设吗？')) return;
 
     try {
-        await apiFetch(`/api/v1/presets/${id}`, { method: 'DELETE' });
+        await apiFetch(`/ api / v1 / presets / ${id} `, { method: 'DELETE' });
         if (state.currentPresetId === id) {
             clearCurrentPresetSelection();
         }
@@ -3248,7 +3704,7 @@ function startOverlayHotkeyCapture() {
         dom.settingOverlayHotkey.value = captured;
         refreshSettingsDirtyState();
         stopOverlayHotkeyCapture();
-        showToast(`热键已设置为 ${captured}`, 'success');
+        showToast(`热键已设置为 ${captured} `, 'success');
     };
 
     window.addEventListener('keydown', overlayHotkeyCaptureHandler, true);
@@ -3447,7 +3903,7 @@ function initSettingsPanel() {
         }
         showToast('正在测试连接...', 'info');
         try {
-            const res = await apiFetch(`/api/v1/ai/test/${id}`, { method: 'POST' });
+            const res = await apiFetch(`/ api / v1 / ai / test / ${id} `, { method: 'POST' });
             const data = await res.json().catch(() => ({}));
             renderProviderTestResult(data, res.status);
             const level = data.success ? 'success' : 'error';
@@ -3731,7 +4187,7 @@ async function checkGitHubUpdate(options = {}) {
 
         if (data.update_available) {
             if (!silent) {
-                showToast(`发现新版本: ${data.latest_version}。${UPDATE_GUIDE_TEXT}`, 'success');
+                showToast(`发现新版本: ${data.latest_version}。${UPDATE_GUIDE_TEXT} `, 'success');
             }
         } else {
             if (!silent) {
@@ -3833,6 +4289,19 @@ async function fetchSettings() {
     dom.settingOverlayHotkeyMode.value = inferOverlayHotkeyMode(normalizedHotkey);
     dom.settingOverlayMouseSideButton.value = normalizeOverlayMouseSideButton(quickOverlay.mouse_side_button);
     dom.settingOverlayPollIntervalMs.value = quickOverlay.poll_interval_ms || 40;
+
+    // Overlay theme
+    const overlayTheme = quickOverlay.theme || {};
+    if (dom.settingOverlayBgOpacity) {
+        dom.settingOverlayBgOpacity.value = overlayTheme.bg_opacity ?? 0.92;
+        const opVal = document.getElementById('overlay-opacity-value');
+        if (opVal) opVal.textContent = dom.settingOverlayBgOpacity.value;
+        dom.settingOverlayBgOpacity.addEventListener('input', () => {
+            if (opVal) opVal.textContent = dom.settingOverlayBgOpacity.value;
+        });
+    }
+    if (dom.settingOverlayAccentColor) dom.settingOverlayAccentColor.value = overlayTheme.accent_color || '#7c5cff';
+    if (dom.settingOverlayFontSize) dom.settingOverlayFontSize.value = overlayTheme.font_size ?? 12;
 
     // Custom headers
     const customHeaders = data.ai.custom_headers || {};
@@ -4054,7 +4523,12 @@ async function saveAllSettings() {
                 compact_mode: dom.settingOverlayCompactMode.checked,
                 trigger_hotkey: overlayHotkeyCheck.hotkey,
                 mouse_side_button: overlayMouseSideButton,
-                poll_interval_ms: parseInt(dom.settingOverlayPollIntervalMs.value)
+                poll_interval_ms: parseInt(dom.settingOverlayPollIntervalMs.value),
+                theme: {
+                    bg_opacity: parseFloat(dom.settingOverlayBgOpacity?.value ?? 0.92),
+                    accent_color: dom.settingOverlayAccentColor?.value || '#7c5cff',
+                    font_size: parseInt(dom.settingOverlayFontSize?.value ?? 12)
+                }
             })
         });
 

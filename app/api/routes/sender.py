@@ -18,8 +18,10 @@ from app.api.schemas import (
     SendStatusResponse,
 )
 from app.core.config import load_config
+from app.core.history import record_send, get_history, get_total, clear_history
 from app.core.overlay_status import push_overlay_status
 from app.core.sender import sender
+from app.core import stats as send_stats
 
 router = APIRouter()
 
@@ -124,6 +126,15 @@ async def send_single(body: SendSingleRequest):
     _push_webui_overlay_status(overlay_enabled, f"{source_label} 单条发送中...", False)
     result = await sender.send_single_async(body.text, **sender_options)
 
+    # Record to send history
+    record_send(
+        text=body.text,
+        source=source,
+        success=result.get("success", False),
+        error=result.get("error"),
+    )
+    send_stats.record_send(success=result.get("success", False))
+
     if result.get("success"):
         _push_webui_overlay_status(
             overlay_enabled, f"{source_label} 单条发送完成", True
@@ -179,6 +190,7 @@ async def send_batch(body: SendBatchRequest):
         f"{source_label} 批量发送开始，共 {len(body.texts)} 条",
         False,
     )
+    send_stats.record_batch()
 
     progress_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -228,6 +240,15 @@ async def send_batch(body: SendBatchRequest):
                             overlay_text,
                             overlay_final,
                         )
+                    # Record each batch line result to send history
+                    if p.get("status") == "line_result":
+                        record_send(
+                            text=p.get("text", ""),
+                            source=source,
+                            success=p.get("success", False),
+                            error=p.get("error"),
+                        )
+                        send_stats.record_send(success=p.get("success", False))
                     yield f"data: {json.dumps(p, ensure_ascii=False)}\n\n"
                     if p.get("status") in ("completed", "cancelled", "error"):
                         break
@@ -258,3 +279,22 @@ async def stop_batch():
 async def send_status():
     """获取当前发送状态。"""
     return SendStatusResponse(sending=sender.is_sending, progress=sender.progress)
+
+
+# ── Send History ───────────────────────────────────────────────────────────
+
+
+@router.get("/history")
+async def get_send_history(limit: int = 50, offset: int = 0):
+    """获取发送历史记录。"""
+    return {
+        "items": get_history(limit=limit, offset=offset),
+        "total": get_total(),
+    }
+
+
+@router.delete("/history", response_model=MessageResponse)
+async def delete_send_history():
+    """清空发送历史。"""
+    clear_history()
+    return MessageResponse(message="发送历史已清空")
