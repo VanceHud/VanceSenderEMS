@@ -1173,6 +1173,12 @@ input::placeholder {
     border: 1px solid rgba(139, 123, 255, 0.35);
 }
 
+.badge-b {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.35);
+}
+
 .text-content {
     flex: 1;
     min-width: 0;

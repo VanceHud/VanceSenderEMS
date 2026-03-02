@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class TextLine(BaseModel):
-    type: Literal["me", "do"] = "me"
+    type: Literal["me", "do", "b"] = "me"
     content: str
 
 

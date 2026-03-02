@@ -1820,7 +1820,7 @@ function buildTextSnapshot(texts) {
     return JSON.stringify(
         (Array.isArray(texts) ? texts : [])
             .map((item) => {
-                if (!item || (item.type !== 'me' && item.type !== 'do') || typeof item.content !== 'string') {
+                if (!item || (item.type !== 'me' && item.type !== 'do' && item.type !== 'b') || typeof item.content !== 'string') {
                     return null;
                 }
                 return {
@@ -1909,6 +1909,9 @@ function parseAndImportText(rawText) {
         } else if (line.toLowerCase().startsWith('/me ')) {
             type = 'me';
             content = line.substring(4).trim();
+        } else if (line.toLowerCase().startsWith('/b ')) {
+            type = 'b';
+            content = line.substring(3).trim();
         }
 
         return { type, content };
@@ -2202,7 +2205,7 @@ function confirmEditTextUpdate() {
         return;
     }
 
-    const type = dom.editTextType.value === 'do' ? 'do' : 'me';
+    const type = dom.editTextType.value === 'do' ? 'do' : dom.editTextType.value === 'b' ? 'b' : 'me';
 
     if (index === null || index === undefined) {
         state.texts.push({ type, content });
@@ -3421,7 +3424,7 @@ async function submitAIRewrite() {
 
         const rewritten = (Array.isArray(rewritePayload.texts) ? rewritePayload.texts : [])
             .map((item) => {
-                if (!item || (item.type !== 'me' && item.type !== 'do') || typeof item.content !== 'string') {
+                if (!item || (item.type !== 'me' && item.type !== 'do' && item.type !== 'b') || typeof item.content !== 'string') {
                     return null;
                 }
                 const content = item.content.trim();
