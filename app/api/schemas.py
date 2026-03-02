@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ── Preset schemas ─────────────────────────────────────────────────────────
@@ -207,12 +207,78 @@ class QuickOverlaySettings(BaseModel):
 
 
 
+class ServerSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    host: str = "127.0.0.1"
+    port: int = 8730
+    lan_access: bool = False
+    token_set: bool = False
+    app_version: str = ""
+    webui_url: str = ""
+    docs_url: str = ""
+    ui_mode: str = "browser"
+    desktop_shell_active: bool = False
+    desktop_shell_maximized: bool = False
+    system_tray_supported: bool = False
+    lan_ipv4_list: list[str] = Field(default_factory=list)
+    lan_urls: list[str] = Field(default_factory=list)
+    lan_docs_urls: list[str] = Field(default_factory=list)
+    risk_no_token_with_lan: bool = False
+    security_warning: str = ""
+
+
+class LaunchSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    open_webui_on_start: bool = False
+    open_intro_on_first_start: bool = True
+    show_console_on_start: bool = False
+    enable_tray_on_start: bool = True
+    close_action: str = "ask"
+
+
+class SenderSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    method: str = "clipboard"
+    chat_open_key: str = "t"
+    delay_open_chat: int = 450
+    delay_after_paste: int = 160
+    delay_after_send: int = 260
+    delay_between_lines: int = 1800
+    focus_timeout: int = 8000
+    retry_count: int = 3
+    retry_interval: int = 450
+    typing_char_delay: int = 18
+
+
+class AISettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    default_provider: str = ""
+    system_prompt: str = ""
+    providers: list[dict[str, Any]] = Field(default_factory=list)
+    custom_headers: dict[str, str] = Field(default_factory=dict)
+
+
+class QuickOverlaySettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = True
+    show_webui_send_status: bool = True
+    compact_mode: bool = False
+    trigger_hotkey: str = "f7"
+    mouse_side_button: str = ""
+    poll_interval_ms: int = 40
+
+
 class SettingsResponse(BaseModel):
-    server: dict[str, Any]
-    launch: dict[str, Any]
-    sender: dict[str, Any]
-    ai: dict[str, Any]
-    quick_overlay: dict[str, Any]
+    server: ServerSettingsResponse
+    launch: LaunchSettingsResponse
+    sender: SenderSettingsResponse
+    ai: AISettingsResponse
+    quick_overlay: QuickOverlaySettingsResponse
 
 
 class UpdateCheckResponse(BaseModel):

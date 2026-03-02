@@ -56,6 +56,22 @@ def _client_cache_key(provider: dict[str, Any], custom_headers: dict[str, str] |
     return f"{api_base}|{api_key}|{header_str}"
 
 
+def invalidate_client_cache() -> None:
+    """Clear all cached AsyncOpenAI clients.
+
+    Should be called whenever provider config or custom_headers change
+    (add / update / delete provider, update AI settings) so that stale
+    clients with outdated credentials or headers are discarded.
+    """
+    with _client_cache_lock:
+        for client in _client_cache.values():
+            try:
+                client.close()  # type: ignore[union-attr]
+            except Exception:
+                pass
+        _client_cache.clear()
+
+
 def _build_client(
     provider: dict[str, Any], cfg: dict[str, Any] | None = None
 ) -> AsyncOpenAI:
@@ -176,7 +192,7 @@ async def generate_texts(
     count: int | None = None,
     text_type: str = "mixed",
     style: str | None = None,
-) -> list[dict[str, str]]:
+) -> tuple[list[dict[str, str]], str]:
     """Generate a list of /me + /do lines for a given scenario.
 
     Args:
@@ -187,9 +203,11 @@ async def generate_texts(
         style: Optional style hint for generation tone.
 
     Returns:
-        List of dicts: [{"type": "me"|"do", "content": "..."}]
+        Tuple of (texts, resolved_provider_id) where texts is
+        [{"type": "me"|"do", "content": "..."}].
     """
     cfg, provider = _resolve_provider(provider_id)
+    resolved_pid = provider.get("id", "")
     client = _build_client(provider, cfg)
     system = _get_system_prompt(cfg)
 
@@ -206,7 +224,7 @@ async def generate_texts(
     )
 
     raw = (response.choices[0].message.content or "") if response.choices else ""
-    return _parse_lines(raw)
+    return _parse_lines(raw), resolved_pid
 
 
 async def generate_texts_stream(
@@ -263,9 +281,14 @@ async def rewrite_texts(
     provider_id: str | None = None,
     style: str | None = None,
     requirements: str | None = None,
-) -> list[dict[str, str]]:
-    """Rewrite existing RP lines while preserving order and type."""
+) -> tuple[list[dict[str, str]], str]:
+    """Rewrite existing RP lines while preserving order and type.
+
+    Returns:
+        Tuple of (rewritten_texts, resolved_provider_id).
+    """
     cfg, provider = _resolve_provider(provider_id)
+    resolved_pid = provider.get("id", "")
     client = _build_client(provider, cfg)
     system = _REWRITE_SYSTEM_PROMPT
 
@@ -318,12 +341,12 @@ async def rewrite_texts(
         expected_type = texts[idx].get("type")
         safe_type = expected_type if expected_type in ("me", "do") else item["type"]
         rewritten.append({"type": safe_type, "content": item["content"]})
-    return rewritten
+    return rewritten, resolved_pid
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
-_LINE_RE = re.compile(r"^/(me|do)\s+(.+)$", re.MULTILINE)
+_LINE_RE = re.compile(r"^(?:\d+\.\s*)?/(me|do)\s+(.+)$", re.MULTILINE)
 
 
 def _parse_lines(raw: str) -> list[dict[str, str]]:

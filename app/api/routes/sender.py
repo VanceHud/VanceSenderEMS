@@ -171,7 +171,7 @@ async def send_batch(body: SendBatchRequest):
         )
 
     sender_options = _sender_delays(cfg)
-    delay_between = body.delay_between or sender_options.get("delay_between", 1500)
+    delay_between = body.delay_between or sender_options.pop("delay_between")
     sender_options.pop("delay_between", None)
 
     _push_webui_overlay_status(

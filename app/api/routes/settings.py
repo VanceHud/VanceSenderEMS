@@ -35,6 +35,7 @@ from app.core.config import (
     update_provider,
 )
 from app.api.auth import invalidate_token_cache
+from app.core.ai_client import invalidate_client_cache
 from app.core.desktop_shell import (
     get_desktop_window_state as get_desktop_shell_state,
     has_system_tray_support,
@@ -112,22 +113,14 @@ def _build_server_section(cfg: dict, request: Request) -> dict:
     server_section["port"] = server_port
     server_section["lan_access"] = runtime_lan_access
 
-    # Resolve LAN IPs
-    runtime_lan_ipv4_list_raw = getattr(request.app.state, "runtime_lan_ipv4_list", [])
+    # Resolve LAN IPs — prefer startup-cached list, fallback to live query
     lan_ipv4_list: list[str] = []
-    if isinstance(runtime_lan_ipv4_list_raw, list):
-        for item in runtime_lan_ipv4_list_raw:
-            if not isinstance(item, str):
-                continue
-            value = item.strip()
-            if not value or value in lan_ipv4_list:
-                continue
-            lan_ipv4_list.append(value)
-
-    if runtime_lan_access and not lan_ipv4_list:
-        lan_ipv4_list = get_lan_ipv4_addresses()
-    elif not runtime_lan_access:
-        lan_ipv4_list = []
+    if runtime_lan_access:
+        cached = getattr(request.app.state, "runtime_lan_ipv4_list", None)
+        if isinstance(cached, list) and cached:
+            lan_ipv4_list = [ip for ip in cached if isinstance(ip, str) and ip.strip()]
+        if not lan_ipv4_list:
+            lan_ipv4_list = get_lan_ipv4_addresses()
 
     # Build LAN URLs
     lan_url_list = [f"http://{lan_ipv4}:{server_port}" for lan_ipv4 in lan_ipv4_list]
@@ -342,18 +335,16 @@ async def update_ai_settings(body: AISettings):
                 detail=f"默认服务商 '{default_provider}' 不存在",
             )
 
-    # custom_headers must fully replace (not deep-merge) so that deleted
-    # keys are actually removed from the config.
+    # Atomic load → modify → save to avoid TOCTOU double-write
     custom_headers = patch.pop("custom_headers", None)
-
-    if patch:
-        update_config({"ai": patch})
-
+    cfg = load_config()
+    ai = cfg.setdefault("ai", {})
+    ai.update(patch)
     if custom_headers is not None:
-        cfg = load_config()
-        cfg.setdefault("ai", {})["custom_headers"] = custom_headers
-        save_config(cfg)
+        ai["custom_headers"] = custom_headers
+    save_config(cfg)
 
+    invalidate_client_cache()
     return MessageResponse(message="AI设置已更新")
 
 
@@ -397,6 +388,7 @@ async def list_providers():
 async def create_provider(body: ProviderCreate):
     """添加AI服务商。"""
     p = add_provider(body.model_dump())
+    invalidate_client_cache()
     return ProviderResponse(
         id=p["id"],
         name=p["name"],
@@ -413,6 +405,7 @@ async def update_provider_route(provider_id: str, body: ProviderUpdate):
     p = update_provider(provider_id, patch)
     if p is None:
         raise HTTPException(status_code=404, detail=f"服务商 '{provider_id}' 不存在")
+    invalidate_client_cache()
     return ProviderResponse(
         id=p["id"],
         name=p["name"],
@@ -426,6 +419,7 @@ async def update_provider_route(provider_id: str, body: ProviderUpdate):
 async def delete_provider_route(provider_id: str):
     """删除AI服务商。"""
     if delete_provider(provider_id):
+        invalidate_client_cache()
         return MessageResponse(message=f"服务商 '{provider_id}' 已删除")
     raise HTTPException(status_code=404, detail=f"服务商 '{provider_id}' 不存在")
 

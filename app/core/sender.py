@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ctypes
 import ctypes.wintypes as wintypes
 import time
@@ -10,6 +11,14 @@ import threading
 from typing import Any, Callable
 
 import pyperclip
+
+# ── Error codes for structured send results ──────────────────────────────────
+
+ERROR_EMPTY_TEXT = "empty_text"
+ERROR_FIVEM_NOT_FOREGROUND = "fivem_not_foreground"
+ERROR_CLIPBOARD = "clipboard_error"
+ERROR_SENDINPUT = "sendinput_failed"
+ERROR_UNKNOWN = "unknown_error"
 
 # ── Windows API constants ──────────────────────────────────────────────────
 
@@ -335,6 +344,28 @@ class KeyboardSender:
     def mark_idle(self) -> None:
         self._set_sending(False)
 
+    @contextlib.contextmanager
+    def batch_context(self):
+        """Context manager that claims the batch lock and guarantees cleanup.
+
+        Usage::
+
+            with sender.batch_context() as claimed:
+                if not claimed:
+                    # already sending
+                    return
+                sender.send_batch_sync(...)
+
+        ``_sending`` is always reset to ``False`` on exit, even if the
+        batch raises or is cancelled.
+        """
+        claimed = self.try_claim_batch()
+        try:
+            yield claimed
+        finally:
+            if claimed:
+                self.mark_idle()
+
     # ── public API ─────────────────────────────────────────────────────
 
     def send_single(
@@ -353,10 +384,11 @@ class KeyboardSender:
         """Send one line of text. Blocking. Returns result dict."""
         attempts = max(1, int(retry_count) + 1)
         last_error = "发送失败"
+        last_error_code = ERROR_UNKNOWN
         clean_text = text.strip()
 
         if not clean_text:
-            return {"success": False, "text": text, "error": "发送文本为空"}
+            return {"success": False, "text": text, "error": "发送文本为空", "error_code": ERROR_EMPTY_TEXT}
 
         attempt_profiles = _build_attempt_profiles(
             attempts=attempts,
@@ -381,6 +413,7 @@ class KeyboardSender:
                         f"第 {attempt} 次尝试未检测到 FiveM 在前台，"
                         f"当前窗口: {title}。请先切回 FiveM 后重试"
                     )
+                    last_error_code = ERROR_FIVEM_NOT_FOREGROUND
                 else:
                     try:
                         self._send_once(
@@ -398,7 +431,17 @@ class KeyboardSender:
                             "attempt": attempt,
                             "method": active_method,
                         }
+                    except OSError as exc:
+                        err_msg = str(exc)
+                        if "剪贴板" in err_msg:
+                            last_error_code = ERROR_CLIPBOARD
+                        else:
+                            last_error_code = ERROR_SENDINPUT
+                        last_error = (
+                            f"第 {attempt} 次尝试失败（{active_method}）: {exc}"
+                        )
                     except Exception as exc:
+                        last_error_code = ERROR_UNKNOWN
                         last_error = (
                             f"第 {attempt} 次尝试失败（{active_method}）: {exc}"
                         )
@@ -410,6 +453,7 @@ class KeyboardSender:
             "success": False,
             "text": clean_text,
             "error": last_error,
+            "error_code": last_error_code,
             "attempts": attempts,
         }
 

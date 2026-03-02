@@ -20,7 +20,6 @@ from app.core.ai_client import (
     rewrite_texts,
     test_provider,
 )
-from app.core.config import load_config
 
 
 router = APIRouter()
@@ -50,9 +49,7 @@ def _format_test_error(result: dict[str, object]) -> str:
 async def ai_generate(body: AIGenerateRequest):
     """使用AI生成一套/me和/do文本。"""
     try:
-        cfg = load_config()
-        provider_id = body.provider_id or cfg.get("ai", {}).get("default_provider", "")
-        texts = await generate_texts(
+        texts, resolved_pid = await generate_texts(
             scenario=body.scenario,
             provider_id=body.provider_id,
             count=body.count,
@@ -72,7 +69,7 @@ async def ai_generate(body: AIGenerateRequest):
 
         return AIGenerateResponse(
             texts=validated_texts,
-            provider_id=provider_id,
+            provider_id=resolved_pid,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -118,9 +115,7 @@ async def ai_generate_stream(body: AIGenerateRequest):
 async def ai_rewrite(body: AIRewriteRequest):
     """使用AI重写单条或多条文本。"""
     try:
-        cfg = load_config()
-        provider_id = body.provider_id or cfg.get("ai", {}).get("default_provider", "")
-        rewritten = await rewrite_texts(
+        rewritten, resolved_pid = await rewrite_texts(
             texts=[item.model_dump() for item in body.texts],
             provider_id=body.provider_id,
             style=body.style,
@@ -137,7 +132,7 @@ async def ai_rewrite(body: AIRewriteRequest):
         if len(validated_texts) != len(body.texts):
             raise RuntimeError("AI重写结果与输入条数不一致。")
 
-        return AIRewriteResponse(texts=validated_texts, provider_id=provider_id)
+        return AIRewriteResponse(texts=validated_texts, provider_id=resolved_pid)
     except ValueError as exc:
         raise HTTPException(
             status_code=400,

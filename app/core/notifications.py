@@ -30,15 +30,29 @@ _lock = threading.Lock()
 _store: list[Notification] = []
 
 
+_DEDUP_WINDOW_SECONDS = 10.0
+
+
 def push_notification(message: str, *, level: str = "warning") -> None:
     """Append a notification and log it at the appropriate level.
 
     The message is stored for the frontend AND printed via logging so it
     still appears in the console when available.
+
+    Duplicate notifications (same level + message) within
+    ``_DEDUP_WINDOW_SECONDS`` are suppressed to avoid flooding the UI.
     """
-    entry = Notification(level=level, message=message)
+    now = time.time()
 
     with _lock:
+        # Dedup: skip if an identical notification was pushed recently
+        for existing in reversed(_store):
+            if now - existing.timestamp > _DEDUP_WINDOW_SECONDS:
+                break
+            if existing.level == level and existing.message == message:
+                return
+
+        entry = Notification(level=level, message=message, timestamp=now)
         _store.append(entry)
         if len(_store) > _MAX_NOTIFICATIONS:
             _store[:] = _store[-_MAX_NOTIFICATIONS:]
