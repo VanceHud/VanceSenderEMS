@@ -248,7 +248,7 @@ def _build_attempt_profiles(
         "focus_timeout": max(
             int(base_profile["focus_timeout"]), DEFAULT_FOCUS_TIMEOUT_MS
         ),
-        "focus_stable": max(DEFAULT_FOCUS_STABLE_MS + 80, DEFAULT_FOCUS_STABLE_MS),
+        "focus_stable": DEFAULT_FOCUS_STABLE_MS + 80,
         "retry_interval": max(
             int(base_profile["retry_interval"]), DEFAULT_RETRY_INTERVAL_MS
         ),

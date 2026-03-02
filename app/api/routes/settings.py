@@ -34,6 +34,7 @@ from app.core.config import (
     update_config,
     update_provider,
 )
+from app.api.auth import invalidate_token_cache
 from app.core.desktop_shell import (
     get_desktop_window_state as get_desktop_shell_state,
     has_system_tray_support,
@@ -280,6 +281,8 @@ async def update_server_settings(body: ServerSettings):
         host = "0.0.0.0" if patch["lan_access"] else "127.0.0.1"
         patch["host"] = host
     update_config({"server": patch})
+    if "token" in patch:
+        invalidate_token_cache()
     return MessageResponse(message="服务器设置已更新，部分配置需重启生效")
 
 

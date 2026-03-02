@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import threading
 import uuid
 from typing import Any
 
@@ -19,16 +20,39 @@ DATA_DIR = RUNTIME_ROOT / "data"
 PRESETS_DIR = DATA_DIR / "presets"
 
 
+# ── Thread-safe config cache ──────────────────────────────────────────────
+
+_config_lock = threading.Lock()
+_cached_config: dict[str, Any] | None = None
+_cached_config_mtime: float = 0.0
+
 
 def _ensure_dirs() -> None:
     PRESETS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def load_config() -> dict[str, Any]:
-    """Load configuration from YAML file."""
+    """Load configuration from YAML file.
+
+    Uses file-mtime caching: returns an in-memory copy when the file
+    has not been modified since the last read, avoiding redundant disk IO.
+    """
+    global _cached_config, _cached_config_mtime
+
     _ensure_dirs()
     if not CONFIG_PATH.exists():
         return _default_config()
+
+    # Fast path: return cached copy when file hasn't changed
+    try:
+        current_mtime = os.path.getmtime(str(CONFIG_PATH))
+    except OSError:
+        current_mtime = 0.0
+
+    if _cached_config is not None and current_mtime == _cached_config_mtime:
+        import copy
+        return copy.deepcopy(_cached_config)
+
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f) or {}
@@ -41,38 +65,66 @@ def load_config() -> dict[str, Any]:
     if not isinstance(cfg, dict):
         push_notification("config.yaml 内容不是有效的配置字典，已回退到默认配置。")
         return _default_config()
-    return _merge_defaults(cfg)
+
+    result = _merge_defaults(cfg)
+
+    # Update cache
+    import copy
+    _cached_config = copy.deepcopy(result)
+    _cached_config_mtime = current_mtime
+
+    return result
 
 
 def save_config(cfg: dict[str, Any]) -> None:
-    """Save configuration to YAML file (atomic write via temp + rename)."""
+    """Save configuration to YAML file (atomic write via temp + rename).
+
+    Thread-safe: writes are serialized via ``_config_lock``.
+    Automatically refreshes the in-memory cache after a successful write.
+    """
+    global _cached_config, _cached_config_mtime
+
     _ensure_dirs()
-    try:
-        fd, tmp_path = tempfile.mkstemp(
-            suffix=".tmp",
-            prefix="config_",
-            dir=str(CONFIG_PATH.parent),
-        )
+    with _config_lock:
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                yaml.dump(
-                    cfg, f, default_flow_style=False,
-                    allow_unicode=True, sort_keys=False,
-                )
-            os.replace(tmp_path, str(CONFIG_PATH))
-        except BaseException:
-            # Clean up temp file on any write/rename failure
+            fd, tmp_path = tempfile.mkstemp(
+                suffix=".tmp",
+                prefix="config_",
+                dir=str(CONFIG_PATH.parent),
+            )
             try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
-    except OSError as exc:
-        push_notification(f"配置保存失败: {exc}", level="error")
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    yaml.dump(
+                        cfg, f, default_flow_style=False,
+                        allow_unicode=True, sort_keys=False,
+                    )
+                os.replace(tmp_path, str(CONFIG_PATH))
+            except BaseException:
+                # Clean up temp file on any write/rename failure
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except OSError as exc:
+            push_notification(f"配置保存失败: {exc}", level="error")
+            return
+
+        # Refresh cache with newly saved config
+        import copy
+        try:
+            _cached_config = copy.deepcopy(cfg)
+            _cached_config_mtime = os.path.getmtime(str(CONFIG_PATH))
+        except OSError:
+            _cached_config = None
+            _cached_config_mtime = 0.0
 
 
 def update_config(patch: dict[str, Any]) -> dict[str, Any]:
-    """Merge patch into existing config and save."""
+    """Merge patch into existing config and save.
+
+    Thread-safe: delegates to ``save_config`` which holds ``_config_lock``.
+    """
     cfg = load_config()
     _deep_merge(cfg, patch)
     save_config(cfg)

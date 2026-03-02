@@ -84,6 +84,25 @@ def _resolve_provider(
     return cfg, provider
 
 
+def _build_generate_user_prompt(
+    scenario: str,
+    count: int | None = None,
+    text_type: str = "mixed",
+    style: str | None = None,
+) -> str:
+    """Build the user-message prompt for AI text generation."""
+    parts: list[str] = [f"场景描述：{scenario}"]
+    if count:
+        parts.append(f"请生成大约{count}条文本。")
+    if text_type == "me":
+        parts.append("只使用/me命令。")
+    elif text_type == "do":
+        parts.append("只使用/do命令。")
+    if style and style.strip():
+        parts.append(f"请使用以下风格：{style.strip()}。")
+    return "\n".join(parts)
+
+
 # ── Public functions ──────────────────────────────────────────────────────
 
 
@@ -110,21 +129,13 @@ async def generate_texts(
     client = _build_client(provider, cfg)
     system = _get_system_prompt(cfg)
 
-    user_parts: list[str] = [f"场景描述：{scenario}"]
-    if count:
-        user_parts.append(f"请生成大约{count}条文本。")
-    if text_type == "me":
-        user_parts.append("只使用/me命令。")
-    elif text_type == "do":
-        user_parts.append("只使用/do命令。")
-    if style and style.strip():
-        user_parts.append(f"请使用以下风格：{style.strip()}。")
+    user_prompt = _build_generate_user_prompt(scenario, count, text_type, style)
 
     response = await client.chat.completions.create(
         model=provider.get("model", "gpt-4o"),
         messages=[
             {"role": "system", "content": system},
-            {"role": "user", "content": "\n".join(user_parts)},
+            {"role": "user", "content": user_prompt},
         ],
         temperature=0.8,
         max_tokens=2048,
@@ -146,21 +157,13 @@ async def generate_texts_stream(
     client = _build_client(provider, cfg)
     system = _get_system_prompt(cfg)
 
-    user_parts: list[str] = [f"场景描述：{scenario}"]
-    if count:
-        user_parts.append(f"请生成大约{count}条文本。")
-    if text_type == "me":
-        user_parts.append("只使用/me命令。")
-    elif text_type == "do":
-        user_parts.append("只使用/do命令。")
-    if style and style.strip():
-        user_parts.append(f"请使用以下风格：{style.strip()}。")
+    user_prompt = _build_generate_user_prompt(scenario, count, text_type, style)
 
     stream = await client.chat.completions.create(
         model=provider.get("model", "gpt-4o"),
         messages=[
             {"role": "system", "content": system},
-            {"role": "user", "content": "\n".join(user_parts)},
+            {"role": "user", "content": user_prompt},
         ],
         temperature=0.8,
         max_tokens=2048,
