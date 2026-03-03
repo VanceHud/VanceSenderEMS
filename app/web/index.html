@@ -171,176 +171,208 @@
                 <div id="home-security-warning" class="home-security-warning hidden" role="alert" aria-live="assertive">
                 </div>
 
-                <div class="home-hero">
-                    <div class="hero-blur-blob blob-1"></div>
-                    <div class="hero-blur-blob blob-2"></div>
-                    <div class="hero-content">
-                        <h2 class="hero-title">欢迎使用 VanceSender</h2>
-                        <p class="hero-subtitle">重新定义 RP 文本发送体验，高效、轻量、现代化。</p>
-                    </div>
-                </div>
-
-                <div class="home-grid">
-                    <div class="glass-card home-card" style="--anim-delay: 0.1s">
-                        <h2>
-                            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <path d="M2 12h20"></path>
-                                <path
-                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
-                                </path>
-                            </svg>
-                            WebUI 地址
-                        </h2>
-                        <p class="desc">本机访问地址（仅本机访问使用）</p>
-                        <div class="home-code-block">
-                            <span id="home-local-url" class="code">http://127.0.0.1:8730</span>
-                        </div>
-                        <p class="desc">API 文档地址</p>
-                        <div class="home-code-block">
-                            <span id="home-docs-url" class="code">http://127.0.0.1:8730/docs</span>
-                        </div>
-                    </div>
-
-                    <div class="glass-card home-card home-card-lan" style="--anim-delay: 0.15s">
-                        <h2>
-                            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
-                                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
-                                <line x1="6" y1="6" x2="6.01" y2="6"></line>
-                                <line x1="6" y1="18" x2="6.01" y2="18"></line>
-                            </svg>
-                            局域网访问
-                        </h2>
-                        <p id="home-lan-status" class="desc">局域网访问状态检测中...</p>
-
-                        <div id="home-lan-enabled" class="hidden">
-                            <div class="home-code-block">
-                                <span id="home-lan-urls" class="code">http://192.168.x.x:8730</span>
+                <div class="home-bento-grid">
+                    <!-- Hero Section -->
+                    <div class="bento-card bento-hero glass-card" style="--anim-delay: 0.1s">
+                        <div class="hero-blur-blob blob-1"></div>
+                        <div class="hero-blur-blob blob-2"></div>
+                        <div class="hero-content">
+                            <div class="hero-header-wrap">
+                                <h2 class="hero-title">欢迎使用 VanceSender</h2>
+                                <p class="hero-subtitle">重新定义 RP 文本发送体验，高效、轻量、现代化。</p>
                             </div>
-                            <div class="home-lan-qr-section">
-                                <div class="home-lan-qr-wrapper">
-                                    <canvas id="home-lan-qrcode"></canvas>
+                            
+                            <div class="hero-quick-info">
+                                <div class="info-pill" title="点击复制" onclick="document.getElementById('home-copy-local-btn').click();">
+                                    <span class="pill-label">本机访问</span>
+                                    <span id="home-local-url" class="pill-value code code-interactive">http://127.0.0.1:8730</span>
                                 </div>
-                                <p class="home-lan-qr-hint">使用手机扫描二维码即可快速打开 WebUI</p>
-                                <div id="home-lan-ip-select-row" class="home-lan-ip-select-row hidden">
-                                    <label for="home-lan-ip-select">切换 IP</label>
-                                    <select id="home-lan-ip-select"></select>
+                                <div class="info-pill" title="点击打开API文档" onclick="window.open('http://127.0.0.1:8730/docs', '_blank');">
+                                    <span class="pill-label">API 文档</span>
+                                    <span id="home-docs-url" class="pill-value code code-interactive">http://127.0.0.1:8730/docs</span>
                                 </div>
-                                <button id="home-copy-lan-btn" class="btn btn-sm btn-secondary"
-                                    type="button">复制局域网地址</button>
                             </div>
-                            <p class="desc">局域网访问开启后可用同一局域网(WIFI)下的设备进行远程控制。建议设置 Token 保护局域网访问安全。</p>
-                        </div>
-
-                        <div id="home-lan-disabled" class="home-inline-tip hidden">
-                            <p>当前未开启局域网访问，可在 <strong>设置 → 网络设置</strong> 中开启。</p>
                         </div>
                     </div>
 
-                    <div class="glass-card home-card" style="--anim-delay: 0.25s">
-                        <h2>
-                            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-                            </svg>
-                            帮助与资源
-                        </h2>
-                        <p class="desc">快速访问文档、官网与项目仓库</p>
-                        <div class="home-link-actions">
-                            <a class="btn btn-secondary home-link-btn" href="https://sender.vhuds.com/help.html"
-                                rel="noopener noreferrer" target="_blank">帮助文档</a>
-                            <a class="btn btn-ghost home-link-btn" href="https://qm.qq.com/q/RNjqaPwYme"
-                                rel="noopener noreferrer" target="_blank">加入用户QQ群</a>
-                            <a class="btn btn-ghost home-link-btn" href="https://sender.vhuds.com"
-                                rel="noopener noreferrer" target="_blank">官方网站</a>
-                            <a class="btn btn-ghost home-link-btn" href="https://github.com/vancehuds/VanceSender"
-                                rel="noopener noreferrer" target="_blank">项目仓库</a>
+                    <!-- Stats Section -->
+                    <div class="bento-card bento-stats glass-card" style="--anim-delay: 0.2s">
+                        <div class="bento-header">
+                            <h2>
+                                <div class="card-icon-wrapper">
+                                    <div class="icon-glow"></div>
+                                    <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M18 20V10"></path>
+                                        <path d="M12 20V4"></path>
+                                        <path d="M6 20v-6"></path>
+                                    </svg>
+                                </div>
+                                运行情况
+                            </h2>
+                        </div>
+                        <div id="stats-dashboard" class="bento-stats-container">
+                            <div class="bento-stats-grid">
+                                <div class="stat-item">
+                                    <span class="stat-value" id="stats-total-sent">0</span>
+                                    <span class="stat-label">总发送</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value text-accent-success" id="stats-success-rate">0%</span>
+                                    <span class="stat-label">成功率</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value" id="stats-total-batches">0</span>
+                                    <span class="stat-label">批量发送</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-value text-accent-danger" id="stats-total-failed">0</span>
+                                    <span class="stat-label">失败数</span>
+                                </div>
+                            </div>
+                            <div id="stats-presets-list" class="stats-presets-list hidden"></div>
                         </div>
                     </div>
 
-                    <div class="glass-card home-card home-card-update" style="--anim-delay: 0.3s">
-                        <h2>
-                            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <polyline points="23 4 23 10 17 10"></polyline>
-                                <polyline points="1 20 1 14 7 14"></polyline>
-                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                            版本更新
-                        </h2>
-                        <p class="desc">快速检查新版本并查看发布页下载安装包。</p>
-                        <p id="home-update-status" class="desc">正在检查更新...</p>
-                        <div class="home-update-meta">
-                            <div class="home-version-item">
-                                <span class="home-version-label">当前版本</span>
-                                <span id="home-current-version" class="home-version-value">-</span>
-                            </div>
-                            <div class="home-version-item">
-                                <span class="home-version-label">最新版本</span>
-                                <span id="home-latest-version" class="home-version-value">-</span>
-                            </div>
+                    <!-- LAN Section -->
+                    <div class="bento-card bento-lan glass-card" style="--anim-delay: 0.3s">
+                        <div class="bento-header">
+                            <h2>
+                                <div class="card-icon-wrapper">
+                                    <div class="icon-glow glow-blue"></div>
+                                    <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                                    </svg>
+                                </div>
+                                局域网控制
+                            </h2>
+                            <span id="home-lan-status" class="bento-status-badge">检测中...</span>
                         </div>
-                        <div id="home-update-tip" class="home-inline-tip hidden"></div>
-                        <div class="home-link-actions home-update-actions">
-                            <button id="home-check-update-btn" class="btn btn-sm btn-outline"
-                                type="button">立即检查更新</button>
-                            <a id="home-update-release-link" class="btn btn-sm btn-ghost hidden" href="#"
-                                rel="noopener noreferrer" target="_blank">查看发布页</a>
+                        <div class="bento-content">
+                            <div id="home-lan-enabled" class="hidden lan-active-layout">
+                                <div class="lan-info-col">
+                                    <div class="home-code-block code-interactive" title="点击复制" onclick="document.getElementById('home-copy-lan-btn').click();">
+                                        <span id="home-lan-urls" class="code">http://192.168.x.x:8730</span>
+                                    </div>
+                                    <p class="desc">在同一局域网(WIFI)设备上打开此地址或扫描右侧二维码，即可进行远程控制。建议在设置中开启 Token 保护。</p>
+                                    <div class="lan-actions">
+                                        <button id="home-copy-lan-btn" class="btn btn-sm btn-secondary btn-icon-text" type="button">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                            复制
+                                        </button>
+                                        <div id="home-lan-ip-select-row" class="home-lan-ip-select-row hidden inline-select">
+                                            <label for="home-lan-ip-select">IP:</label>
+                                            <select id="home-lan-ip-select" class="select-sm"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="lan-qr-col">
+                                    <div class="qr-frame">
+                                        <canvas id="home-lan-qrcode"></canvas>
+                                    </div>
+                                    <p class="qr-hint">扫描打开</p>
+                                </div>
+                            </div>
+                            <div id="home-lan-disabled" class="home-inline-tip hidden">
+                                <div class="empty-state-icon">🌐</div>
+                                <div class="empty-state-text">
+                                    <p>当前未开启局域网访问</p>
+                                    <span>可在使用手机等设备时开启。<strong style="color:var(--text-main);">前往 网络设置 → 开启</strong></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div id="home-public-config-card" class="glass-card home-card home-card-announcement hidden"
-                        style="--anim-delay: 0.35s">
-                        <h2 id="home-public-config-title">
-                            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                            </svg>
-                            <span id="home-public-config-title-text">远程公告</span>
-                        </h2>
+                    <!-- Setup small grid for the rest -->
+                    <div class="bento-subgrid">
+                        <!-- Update Section -->
+                        <div class="bento-card bento-small glass-card bento-update" style="--anim-delay: 0.4s">
+                            <div class="bento-header">
+                                <h2>
+                                    <div class="card-icon-wrapper">
+                                        <div class="icon-glow glow-green"></div>
+                                        <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <polyline points="23 4 23 10 17 10"></polyline>
+                                            <polyline points="1 20 1 14 7 14"></polyline>
+                                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                        </svg>
+                                    </div>
+                                    版本检查
+                                </h2>
+                                <span id="home-update-status" class="bento-status-badge text-muted">检查中...</span>
+                            </div>
+                            <div class="bento-update-meta">
+                                <div class="update-v-item">
+                                    <span class="v-label">当前</span>
+                                    <strong id="home-current-version" class="v-val">-</strong>
+                                </div>
+                                <div class="update-v-separator"></div>
+                                <div class="update-v-item">
+                                    <span class="v-label">最新</span>
+                                    <strong id="home-latest-version" class="v-val">-</strong>
+                                </div>
+                            </div>
+                            <div id="home-update-tip" class="home-inline-tip hidden"></div>
+                            <div class="bento-actions update-actions">
+                                <button id="home-check-update-btn" class="btn btn-sm btn-outline" type="button">检查更新</button>
+                                <a id="home-update-release-link" class="btn btn-sm btn-ghost hidden" href="#" rel="noopener noreferrer" target="_blank">发布页</a>
+                            </div>
+                        </div>
+
+                        <!-- Resources Section -->
+                        <div class="bento-card bento-small glass-card bento-resources" style="--anim-delay: 0.5s">
+                            <div class="bento-header">
+                                <h2>
+                                    <div class="card-icon-wrapper">
+                                        <div class="icon-glow glow-purple"></div>
+                                        <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                                        </svg>
+                                    </div>
+                                    资源与帮助
+                                </h2>
+                            </div>
+                            <div class="bento-micro-cards">
+                                <a class="micro-card" href="https://sender.vhuds.com/help.html" rel="noopener noreferrer" target="_blank">
+                                    <div class="mc-icon">📖</div>
+                                    <span class="mc-text">使用文档</span>
+                                </a>
+                                <a class="micro-card" href="https://qm.qq.com/q/RNjqaPwYme" rel="noopener noreferrer" target="_blank">
+                                    <div class="mc-icon">💬</div>
+                                    <span class="mc-text">加入群聊</span>
+                                </a>
+                                <a class="micro-card" href="https://sender.vhuds.com" rel="noopener noreferrer" target="_blank">
+                                    <div class="mc-icon">🌐</div>
+                                    <span class="mc-text">官方网站</span>
+                                </a>
+                                <a class="micro-card" href="https://github.com/vancehuds/VanceSender" rel="noopener noreferrer" target="_blank">
+                                    <div class="mc-icon">⭐</div>
+                                    <span class="mc-text">项目仓库</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Remote Announcement -->
+                    <div id="home-public-config-card" class="bento-card glass-card home-card-announcement hidden" style="--anim-delay: 0.6s">
+                        <div class="bento-header">
+                            <h2 id="home-public-config-title">
+                                <div class="card-icon-wrapper">
+                                    <div class="icon-glow glow-orange"></div>
+                                    <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                                    </svg>
+                                </div>
+                                <span id="home-public-config-title-text">远程公告</span>
+                            </h2>
+                        </div>
                         <div id="home-public-config-content" class="public-config-content"></div>
-                        <a id="home-public-config-link" class="btn btn-sm btn-ghost hidden section-inline-link" href="#"
-                            rel="noopener noreferrer" target="_blank">查看详情</a>
+                        <a id="home-public-config-link" class="btn btn-sm btn-ghost hidden section-inline-link" href="#" rel="noopener noreferrer" target="_blank">查看详情</a>
                     </div>
-
-                    <div class="glass-card home-card home-card-stats" style="--anim-delay: 0.45s">
-                        <h2>
-                            <svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M18 20V10"></path>
-                                <path d="M12 20V4"></path>
-                                <path d="M6 20v-6"></path>
-                            </svg>
-                            发送统计
-                        </h2>
-                        <div id="stats-dashboard" class="stats-dashboard">
-                            <div class="stats-grid">
-                                <div class="stats-metric">
-                                    <span class="stats-value" id="stats-total-sent">0</span>
-                                    <span class="stats-label">总发送</span>
-                                </div>
-                                <div class="stats-metric">
-                                    <span class="stats-value" id="stats-success-rate">0%</span>
-                                    <span class="stats-label">成功率</span>
-                                </div>
-                                <div class="stats-metric">
-                                    <span class="stats-value" id="stats-total-batches">0</span>
-                                    <span class="stats-label">批量发送</span>
-                                </div>
-                                <div class="stats-metric">
-                                    <span class="stats-value" id="stats-total-failed">0</span>
-                                    <span class="stats-label">失败数</span>
-                                </div>
-                            </div>
-                            <div id="stats-presets-list" class="stats-presets-list"></div>
-                        </div>
-                    </div>
-
                 </div>
             </section>
 
