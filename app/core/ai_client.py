@@ -44,6 +44,42 @@ _DEFAULT_SYSTEM_PROMPT = (
     "如果你无法输出JSON，则每行一条命令，以 /me 或 /do 开头，不要编号，不要额外说明。"
 )
 
+# ── Few-shot examples (injected as user→assistant pairs) ──────────────────
+
+_FEWSHOT_MIXED = (
+    '场景描述：一名警察在路边拦停一辆可疑车辆进行检查\n请生成5条文本。\n'
+    '输出JSON数组，格式：[{"type":"me","content":"..."}, ...]',
+    '[{"type":"me","content":"抬手示意前方车辆靠边停车，右手搭在腰间对讲机上"},'
+    '{"type":"do","content":"警灯闪烁的巡逻车缓缓停在目标车辆后方"},'
+    '{"type":"me","content":"走向驾驶座车窗，微微弯腰敲了敲玻璃"},'
+    '{"type":"do","content":"车窗缓缓降下，车内飘出一股淡淡的烟味"},'
+    '{"type":"me","content":"出示警徽，语气平稳地要求对方提供驾照和行驶证"}]',
+)
+
+_FEWSHOT_ME_ONLY = (
+    '场景描述：角色在酒吧独自喝酒\n请生成3条文本。\n'
+    '只使用/me命令（type全部为me）。\n'
+    '输出JSON数组，格式：[{"type":"me","content":"..."}, ...]',
+    '[{"type":"me","content":"端起威士忌杯轻轻晃了晃，看着琥珀色的液体旋转"},'
+    '{"type":"me","content":"仰头将杯中酒一饮而尽，眉头微微皱了一下"},'
+    '{"type":"me","content":"将空杯推向吧台内侧，食指轻叩桌面示意再来一杯"}]',
+)
+
+_FEWSHOT_DO_ONLY = (
+    '场景描述：暴雨中的城市街道\n请生成3条文本。\n'
+    '只使用/do命令（type全部为do）。\n'
+    '输出JSON数组，格式：[{"type":"do","content":"..."}, ...]',
+    '[{"type":"do","content":"豆大的雨点砸在柏油路面上，溅起一层白蒙蒙的水雾"},'
+    '{"type":"do","content":"路灯昏黄的光线在积水中拉出长长的倒影"},'
+    '{"type":"do","content":"远处传来一声闷雷，整条街道在雨幕中若隐若现"}]',
+)
+
+_FEWSHOT_MAP: dict[str, tuple[str, str]] = {
+    "mixed": _FEWSHOT_MIXED,
+    "me": _FEWSHOT_ME_ONLY,
+    "do": _FEWSHOT_DO_ONLY,
+}
+
 _REWRITE_SYSTEM_PROMPT = (
     "你是一个FiveM角色扮演文本重写助手。"
     "你会收到一组/me和/do文本，并按要求重写。"
@@ -251,6 +287,24 @@ def _estimate_max_tokens(count: int | None) -> int:
     return max(512, min(4096, n * 200))
 
 
+def _build_generate_messages(
+    system: str,
+    user_prompt: str,
+    text_type: str = "mixed",
+) -> list[dict[str, str]]:
+    """Build the full messages array with few-shot example injection."""
+    messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+
+    # Inject one few-shot example pair matched by text_type
+    fewshot = _FEWSHOT_MAP.get(text_type, _FEWSHOT_MIXED)
+    messages.append({"role": "user", "content": fewshot[0]})
+    messages.append({"role": "assistant", "content": fewshot[1]})
+
+    # Actual user request
+    messages.append({"role": "user", "content": user_prompt})
+    return messages
+
+
 # ── Public functions ──────────────────────────────────────────────────────
 
 
@@ -281,14 +335,12 @@ async def generate_texts(
 
     user_prompt = _build_generate_user_prompt(scenario, count, text_type, style)
     max_tokens = _estimate_max_tokens(count)
+    messages = _build_generate_messages(system, user_prompt, text_type)
 
     response = await _call_with_retry(
         client,
         model=provider.get("model", "gpt-4o"),
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         temperature=0.8,
         max_tokens=max_tokens,
     )
@@ -313,13 +365,11 @@ async def generate_texts_stream(
 
     user_prompt = _build_generate_user_prompt(scenario, count, text_type, style)
     max_tokens = _estimate_max_tokens(count)
+    messages = _build_generate_messages(system, user_prompt, text_type)
 
     stream = await client.chat.completions.create(
         model=provider.get("model", "gpt-4o"),
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=messages,
         temperature=0.8,
         max_tokens=max_tokens,
         stream=True,

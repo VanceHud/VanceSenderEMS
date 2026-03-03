@@ -3736,6 +3736,47 @@ input:checked+.slider:before {
     transform: translateY(-1px);
 }
 
+.scene-template-custom {
+    border-color: rgba(250, 204, 21, 0.3) !important;
+    background: rgba(250, 204, 21, 0.06) !important;
+    position: relative;
+}
+
+.scene-template-custom:hover {
+    border-color: rgba(250, 204, 21, 0.5) !important;
+    background: rgba(250, 204, 21, 0.12) !important;
+}
+
+.scene-template-delete {
+    display: none;
+    margin-left: 6px;
+    color: rgba(251, 113, 133, 0.8);
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.scene-template-custom:hover .scene-template-delete {
+    display: inline;
+}
+
+.scene-template-delete:hover {
+    color: #fb7185;
+}
+
+.scene-template-save {
+    border-style: dashed !important;
+    border-color: rgba(250, 204, 21, 0.3) !important;
+    color: var(--text-muted) !important;
+}
+
+.scene-template-save:hover {
+    border-color: rgba(250, 204, 21, 0.5) !important;
+    color: rgba(250, 204, 21, 0.9) !important;
+    background: rgba(250, 204, 21, 0.08) !important;
+}
+
 /* Stats Dashboard */
 .stats-dashboard {
     padding: 8px 0;

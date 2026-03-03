@@ -2751,18 +2751,77 @@ const SCENE_TEMPLATES = [
     { name: '房产交易', category: '商业', scenario: '房产经纪人带客户看房并介绍房源优势，促成签约', style: '热情、专业', textType: 'mixed' },
 ];
 
+// ── Custom scene templates (localStorage persistence) ────────────────────
+const _CUSTOM_TEMPLATES_KEY = 'vancesender_custom_scene_templates';
+
+function _loadCustomTemplates() {
+    try {
+        const raw = localStorage.getItem(_CUSTOM_TEMPLATES_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+
+function _saveCustomTemplates(templates) {
+    try {
+        localStorage.setItem(_CUSTOM_TEMPLATES_KEY, JSON.stringify(templates));
+    } catch { /* quota exceeded — ignore */ }
+}
+
+function saveCurrentAsTemplate() {
+    const scenario = (dom.aiScenario?.value || '').trim();
+    const style = (dom.aiStyle?.value || '').trim();
+    if (!scenario) {
+        showToast('请先填写场景描述再保存模板', 'error');
+        return;
+    }
+
+    // Prompt for a name
+    const name = prompt('为模板起个名字：');
+    if (!name || !name.trim()) return;
+
+    const textTypeRadio = document.querySelector('input[name="ai-type"]:checked');
+    const textType = textTypeRadio ? textTypeRadio.value : 'mixed';
+
+    const customs = _loadCustomTemplates();
+    customs.push({
+        id: 'ct_' + Date.now(),
+        name: name.trim(),
+        category: '⭐ 自定义',
+        scenario,
+        style,
+        textType,
+        custom: true,
+    });
+    _saveCustomTemplates(customs);
+    renderSceneTemplates();
+    showToast(`模板「${name.trim()}」已保存`, 'success');
+}
+
+function deleteCustomTemplate(templateId) {
+    const customs = _loadCustomTemplates().filter(t => t.id !== templateId);
+    _saveCustomTemplates(customs);
+    renderSceneTemplates();
+    showToast('自定义模板已删除', 'info');
+}
+
 function renderSceneTemplates() {
     const bar = document.getElementById('scene-templates-bar');
     if (!bar) return;
 
-    // Group by category
+    // Merge built-in + custom templates
+    const customs = _loadCustomTemplates();
+    const allTemplates = [...customs, ...SCENE_TEMPLATES];
+
+    // Group by category — custom first
     const categories = {};
-    SCENE_TEMPLATES.forEach(t => {
-        if (!categories[t.category]) categories[t.category] = [];
-        categories[t.category].push(t);
+    allTemplates.forEach(t => {
+        const cat = t.category || '其他';
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(t);
     });
 
     bar.innerHTML = '';
+
     for (const [cat, templates] of Object.entries(categories)) {
         const group = document.createElement('div');
         group.className = 'scene-template-group';
@@ -2771,13 +2830,37 @@ function renderSceneTemplates() {
             const pill = document.createElement('button');
             pill.type = 'button';
             pill.className = 'btn btn-sm btn-outline scene-template-pill';
+            if (t.custom) pill.classList.add('scene-template-custom');
             pill.textContent = t.name;
             pill.title = t.scenario;
             pill.addEventListener('click', () => applySceneTemplate(t));
+
+            // Add delete button for custom templates
+            if (t.custom && t.id) {
+                const delBtn = document.createElement('span');
+                delBtn.className = 'scene-template-delete';
+                delBtn.textContent = '×';
+                delBtn.title = '删除此模板';
+                delBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteCustomTemplate(t.id);
+                });
+                pill.appendChild(delBtn);
+            }
+
             group.appendChild(pill);
         });
         bar.appendChild(group);
     }
+
+    // Add "save as template" button at the end
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-sm btn-outline scene-template-pill scene-template-save';
+    saveBtn.innerHTML = '💾 保存为模板';
+    saveBtn.title = '将当前场景描述和风格保存为自定义模板';
+    saveBtn.addEventListener('click', saveCurrentAsTemplate);
+    bar.appendChild(saveBtn);
 }
 
 function applySceneTemplate(template) {
