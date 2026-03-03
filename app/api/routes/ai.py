@@ -20,6 +20,8 @@ from app.core.ai_client import (
     generate_texts_stream,
     rewrite_texts,
     test_provider,
+    _parse_generate_output,
+    _postprocess_texts,
 )
 from app.core.ai_history import (
     save_generation,
@@ -119,6 +121,7 @@ async def ai_generate_stream(body: AIGenerateRequest):
     """流式生成AI文本（SSE）。"""
 
     async def event_gen():
+        accumulated = []
         try:
             async for chunk in generate_texts_stream(
                 scenario=body.scenario,
@@ -127,7 +130,25 @@ async def ai_generate_stream(body: AIGenerateRequest):
                 text_type=body.text_type,
                 style=body.style,
             ):
+                accumulated.append(chunk)
                 yield f"data: {chunk}\n\n"
+
+            # Save to history on successful completion
+            try:
+                raw_text = "".join(accumulated)
+                texts = _parse_generate_output(raw_text)
+                texts = _postprocess_texts(texts)
+                if texts:
+                    save_generation(
+                        scenario=body.scenario,
+                        style=body.style or "",
+                        text_type=body.text_type or "mixed",
+                        provider_id=body.provider_id or "",
+                        texts=texts,
+                    )
+            except Exception:
+                pass  # Don't fail stream if history save fails
+
             yield "data: [DONE]\n\n"
         except UnicodeError as exc:
             import json as _json

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
 import threading
 from typing import Any, AsyncIterator
@@ -10,6 +12,13 @@ from typing import Any, AsyncIterator
 from openai import AsyncOpenAI
 
 from app.core.config import load_config, get_provider_by_id
+
+log = logging.getLogger(__name__)
+
+# ── Retry configuration ───────────────────────────────────────────────────────
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503}
+_MAX_RETRIES = 2
+_RETRY_BASE_DELAY = 1.0  # seconds, exponentially backed off
 
 
 # ── Default system prompt (fallback) ──────────────────────────────────────
@@ -28,7 +37,11 @@ _DEFAULT_SYSTEM_PROMPT = (
     "2. /me 和 /do 交替或混合使用，形成自然叙事节奏。\n"
     "3. 描述具体有画面感，同时保持简洁。\n"
     "4. 前后逻辑连贯，避免自相矛盾。\n\n"
-    "输出格式：每行一条命令，以 /me 或 /do 开头，不要编号，不要额外说明。"
+    "输出格式（必须严格遵守）：\n"
+    '只输出一个JSON数组，不要输出任何其他文字。格式如下：\n'
+    '[{"type":"me","content":"缓缓推开了房门"}, '
+    '{"type":"do","content":"门轴发出吱呀的响声"}]\n\n'
+    "如果你无法输出JSON，则每行一条命令，以 /me 或 /do 开头，不要编号，不要额外说明。"
 )
 
 _REWRITE_SYSTEM_PROMPT = (
@@ -218,15 +231,24 @@ def _build_generate_user_prompt(
 ) -> str:
     """Build the user-message prompt for AI text generation."""
     parts: list[str] = [f"场景描述：{scenario}"]
-    if count:
-        parts.append(f"请生成大约{count}条文本。")
+    effective_count = count or 5
+    parts.append(f"请生成{effective_count}条文本。")
     if text_type == "me":
-        parts.append("只使用/me命令。")
+        parts.append("只使用/me命令（type全部为me）。")
     elif text_type == "do":
-        parts.append("只使用/do命令。")
+        parts.append("只使用/do命令（type全部为do）。")
     if style and style.strip():
         parts.append(f"请使用以下风格：{style.strip()}。")
+    parts.append(
+        '输出JSON数组，格式：[{"type":"me","content":"..."}, ...]'
+    )
     return "\n".join(parts)
+
+
+def _estimate_max_tokens(count: int | None) -> int:
+    """Dynamically estimate max_tokens based on desired line count."""
+    n = count or 5
+    return max(512, min(4096, n * 200))
 
 
 # ── Public functions ──────────────────────────────────────────────────────
@@ -258,19 +280,23 @@ async def generate_texts(
     system = _get_system_prompt(cfg)
 
     user_prompt = _build_generate_user_prompt(scenario, count, text_type, style)
+    max_tokens = _estimate_max_tokens(count)
 
-    response = await client.chat.completions.create(
+    response = await _call_with_retry(
+        client,
         model=provider.get("model", "gpt-4o"),
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.8,
-        max_tokens=2048,
+        max_tokens=max_tokens,
     )
 
     raw = (response.choices[0].message.content or "") if response.choices else ""
-    return _parse_lines(raw), resolved_pid
+    texts = _parse_generate_output(raw)
+    texts = _postprocess_texts(texts)
+    return texts, resolved_pid
 
 
 async def generate_texts_stream(
@@ -286,6 +312,7 @@ async def generate_texts_stream(
     system = _get_system_prompt(cfg)
 
     user_prompt = _build_generate_user_prompt(scenario, count, text_type, style)
+    max_tokens = _estimate_max_tokens(count)
 
     stream = await client.chat.completions.create(
         model=provider.get("model", "gpt-4o"),
@@ -294,7 +321,7 @@ async def generate_texts_stream(
             {"role": "user", "content": user_prompt},
         ],
         temperature=0.8,
-        max_tokens=2048,
+        max_tokens=max_tokens,
         stream=True,
     )
 
@@ -367,14 +394,17 @@ async def rewrite_texts(
     for idx, line in enumerate(source_lines, start=1):
         prompt_parts.append(f"{idx}. {line}")
 
-    response = await client.chat.completions.create(
+    max_tokens = _estimate_max_tokens(len(source_lines))
+
+    response = await _call_with_retry(
+        client,
         model=provider.get("model", "gpt-4o"),
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": "\n".join(prompt_parts)},
         ],
         temperature=0.7,
-        max_tokens=2048,
+        max_tokens=max_tokens,
     )
 
     if not response.choices:
@@ -390,17 +420,147 @@ async def rewrite_texts(
     return rewritten, resolved_pid
 
 
+# ── Retry helper ──────────────────────────────────────────────────────────
+
+
+async def _call_with_retry(
+    client: AsyncOpenAI,
+    **kwargs: Any,
+) -> Any:
+    """Call chat.completions.create with automatic retry on transient errors.
+
+    Retries up to _MAX_RETRIES times on 429 / 5xx status codes using
+    exponential backoff (1s -> 2s).
+    """
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            return await client.chat.completions.create(**kwargs)
+        except Exception as exc:
+            status = getattr(exc, "status_code", None)
+            if status in _RETRYABLE_STATUS_CODES and attempt < _MAX_RETRIES:
+                delay = _RETRY_BASE_DELAY * (2 ** attempt)
+                log.warning(
+                    "AI API returned %s, retrying in %.1fs (attempt %d/%d)",
+                    status, delay, attempt + 1, _MAX_RETRIES,
+                )
+                await asyncio.sleep(delay)
+                last_exc = exc
+                continue
+            raise
+    # Should never reach here, but just in case
+    raise last_exc  # type: ignore[misc]
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────
 
 _LINE_RE = re.compile(r"^(?:\d+\.\s*)?/(me|do|b|e)\s+(.+)$", re.MULTILINE)
+_MAX_CONTENT_LEN = 80
 
 
 def _parse_lines(raw: str) -> list[dict[str, str]]:
-    """Parse AI output into structured list."""
+    """Parse AI output using /me /do line regex (legacy fallback)."""
     results: list[dict[str, str]] = []
     for match in _LINE_RE.finditer(raw):
         results.append({"type": match.group(1), "content": match.group(2).strip()})
     return results
+
+
+def _try_parse_json_array(raw: str) -> list[dict[str, str]] | None:
+    """Try to extract and parse a JSON array from the raw response.
+
+    Returns a list of {type, content} dicts or None if parsing fails.
+    """
+    text = raw.strip()
+    start = text.find("[")
+    end = text.rfind("]")
+    if start < 0 or end < 0 or end <= start:
+        return None
+
+    try:
+        payload = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(payload, list) or len(payload) == 0:
+        return None
+
+    results: list[dict[str, str]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            return None
+        item_type = item.get("type")
+        content = item.get("content")
+        if not isinstance(content, str):
+            return None
+        # Normalise type — accept common variants
+        if item_type in ("me", "do", "b", "e"):
+            pass
+        elif item_type in ("/me", "/do", "/b", "/e"):
+            item_type = item_type[1:]
+        else:
+            return None  # unexpected type -> abort JSON parse
+        safe_content = content.strip()
+        if not safe_content:
+            continue  # skip empty items silently
+        results.append({"type": item_type, "content": safe_content})
+    return results if results else None
+
+
+def _parse_generate_output(raw: str) -> list[dict[str, str]]:
+    """Parse AI generation output: try JSON first, fall back to regex."""
+    # 1. Try structured JSON parse
+    json_result = _try_parse_json_array(raw)
+    if json_result:
+        log.debug("Parsed AI output as JSON (%d items)", len(json_result))
+        return json_result
+
+    # 2. Fall back to regex line parsing
+    log.debug("JSON parse failed, falling back to regex")
+    return _parse_lines(raw)
+
+
+def _postprocess_texts(
+    texts: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """Post-process generated texts for quality.
+
+    - Truncate content exceeding _MAX_CONTENT_LEN at a natural break
+    - Remove exact duplicate lines
+    - Strip leading/trailing whitespace
+    """
+    seen: set[str] = set()
+    result: list[dict[str, str]] = []
+    for item in texts:
+        content = item["content"].strip()
+        if not content:
+            continue
+
+        # Truncate at a natural boundary if too long
+        if len(content) > _MAX_CONTENT_LEN:
+            content = _smart_truncate(content, _MAX_CONTENT_LEN)
+
+        # Deduplicate
+        dedup_key = f"{item['type']}:{content}"
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+
+        result.append({"type": item["type"], "content": content})
+    return result
+
+
+def _smart_truncate(text: str, max_len: int) -> str:
+    """Truncate text at a natural boundary (punctuation or space)."""
+    if len(text) <= max_len:
+        return text
+    # Try to find a natural break point
+    for sep in ("\u3002", "\uff0c", "\u3001", "\uff1b", " ", ".", ","):
+        idx = text.rfind(sep, 0, max_len)
+        if idx > max_len // 2:  # only use if reasonably far in
+            return text[: idx + 1].rstrip()
+    # Hard truncate as last resort
+    return text[:max_len]
 
 
 def _parse_rewrite_payload(raw: str, expected_count: int) -> list[dict[str, str]]:

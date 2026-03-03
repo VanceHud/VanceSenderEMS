@@ -2929,66 +2929,219 @@ async function applyRewrite() {
     closeModal();
 }
 
+// ── Friendly AI error mapping ────────────────────────────────────────────
+const _AI_ERROR_MAP = [
+    { pattern: /invalid.*api.*key|api.*key.*invalid|unauthorized|authentication/i, msg: 'API Key 无效或已过期，请到设置中检查服务商密钥' },
+    { pattern: /rate.*limit|too.*many.*requests|429/i, msg: 'AI 服务请求过于频繁，请稍后再试' },
+    { pattern: /model.*not.*found|does not exist|no such model/i, msg: '所选模型不存在，请在设置中检查模型名称' },
+    { pattern: /insufficient.*quota|billing|exceeded.*quota|payment/i, msg: 'AI 服务余额不足，请检查账户充值情况' },
+    { pattern: /timeout|timed.*out|deadline/i, msg: 'AI 服务响应超时，请稍后重试或更换服务商' },
+    { pattern: /connection.*refused|connect.*error|network/i, msg: '无法连接到 AI 服务，请检查网络或 API 地址' },
+    { pattern: /context.*length|too.*long|max.*tokens/i, msg: '输入内容过长，请缩短场景描述后重试' },
+];
+
+function friendlyAIError(rawError) {
+    const str = typeof rawError === 'string' ? rawError : String(rawError);
+    for (const entry of _AI_ERROR_MAP) {
+        if (entry.pattern.test(str)) return entry.msg;
+    }
+    return str;  // fallback to original message
+}
+
+// ── Active stream abort controller (for cancel support) ──────────────────
+let _aiStreamAbort = null;
+
 async function generateAI() {
     const scenario = dom.aiScenario.value.trim();
     if (!scenario) return showToast('请输入场景描述', 'error');
+
+    // Prevent double-click while already streaming
+    if (_aiStreamAbort) {
+        _aiStreamAbort.abort();
+        _aiStreamAbort = null;
+        return;
+    }
 
     const style = (dom.aiStyle?.value || '').trim();
     const providerId = dom.aiProvider.value;
     const type = document.querySelector('input[name="ai-type"]:checked').value;
     const count = parseInt(dom.aiCount.value) || 5;
 
-    dom.aiGenerateBtn.disabled = true;
-    dom.aiGenerateBtn.innerHTML = '<span class="loading-spinner"></span> 生成中...';
+    dom.aiGenerateBtn.disabled = false;
+    dom.aiGenerateBtn.innerHTML = '<span class="icon">⏹</span> 取消生成';
     dom.aiPreviewList.innerHTML = '';
     state.aiPreview = [];
     dom.aiImportBtn.disabled = true;
 
+    const abortCtrl = new AbortController();
+    _aiStreamAbort = abortCtrl;
+
+    // Accumulate raw stream text and parse incrementally
+    let rawAccumulator = '';
+    let lastRenderedCount = 0;
+
     try {
-        const res = await apiFetch('/api/v1/ai/generate', {
+        const token = getToken();
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+
+        const res = await window.fetch('/api/v1/ai/generate/stream', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
                 scenario,
                 provider_id: providerId,
                 count,
                 text_type: type,
                 style: style || null
-            })
+            }),
+            signal: abortCtrl.signal,
         });
 
-        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+            const hadToken = Boolean(token);
+            clearToken();
+            showAuthGate({ showError: hadToken, message: 'Token 错误，请重新输入' });
+            throw new Error('AUTH_REQUIRED');
+        }
 
         if (!res.ok) {
-            const detailed = formatApiErrorDetail(data.detail, res.status);
-            console.error('AI generate failed', { status: res.status, detail: data.detail });
-            showToast('生成失败: ' + detailed, 'error');
-            return;
+            const errData = await res.json().catch(() => ({}));
+            const detailed = formatApiErrorDetail(errData.detail, res.status);
+            throw new Error(detailed);
         }
 
-        const generatedTexts = Array.isArray(data.texts) ? data.texts : [];
-        const normalizedTexts = generatedTexts
-            .filter((item) => item && (item.type === 'me' || item.type === 'do') && typeof item.content === 'string')
-            .map((item) => ({ type: item.type, content: item.content.trim() }))
-            .filter((item) => item.content.length > 0);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
 
-        if (normalizedTexts.length === 0) {
+        while (!done) {
+            const { value, done: streamDone } = await reader.read();
+            done = streamDone;
+            if (value) {
+                const text = decoder.decode(value, { stream: !done });
+                // Parse SSE lines
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    const payload = line.slice(6);
+
+                    if (payload === '[DONE]') {
+                        done = true;
+                        break;
+                    }
+
+                    // Check for error event
+                    try {
+                        const parsed = JSON.parse(payload);
+                        if (parsed && parsed.error) {
+                            showToast('生成失败: ' + friendlyAIError(parsed.error), 'error');
+                            done = true;
+                            break;
+                        }
+                    } catch (_) {
+                        // Not JSON — it's a text chunk, accumulate it
+                    }
+
+                    rawAccumulator += payload;
+
+                    // Try incremental parsing of accumulated text
+                    const parsed = _tryParseStreamTexts(rawAccumulator);
+                    if (parsed.length > lastRenderedCount) {
+                        state.aiPreview = parsed;
+                        _renderStreamPreview(parsed, lastRenderedCount);
+                        lastRenderedCount = parsed.length;
+                    }
+                }
+            }
+        }
+
+        // Final parse of complete accumulated text
+        const finalTexts = _tryParseStreamTexts(rawAccumulator);
+        if (finalTexts.length > lastRenderedCount) {
+            state.aiPreview = finalTexts;
+            _renderStreamPreview(finalTexts, lastRenderedCount);
+        }
+
+        if (state.aiPreview.length === 0) {
             renderAIPreview();
             showToast('生成失败: 未返回可用文本，请调整场景或服务商重试', 'error');
-            return;
+        } else {
+            dom.aiImportBtn.disabled = false;
+            showToast(`已生成 ${state.aiPreview.length} 条文本`, 'success');
         }
-
-        state.aiPreview = normalizedTexts;
-        renderAIPreview();
-        dom.aiImportBtn.disabled = false;
 
     } catch (e) {
-        if (e.message !== 'AUTH_REQUIRED') {
-            showToast('AI生成错误: ' + e.message, 'error');
+        if (e.name === 'AbortError') {
+            showToast('已取消生成', 'info');
+        } else if (e.message !== 'AUTH_REQUIRED') {
+            showToast('AI生成错误: ' + friendlyAIError(e.message), 'error');
         }
     } finally {
+        _aiStreamAbort = null;
         dom.aiGenerateBtn.disabled = false;
         dom.aiGenerateBtn.innerHTML = '<span class="icon">✨</span> 开始生成';
+    }
+}
+
+/**
+ * Incrementally parse streamed text into structured items.
+ * Tries JSON array first, then falls back to /me /do line regex.
+ */
+function _tryParseStreamTexts(raw) {
+    // Try JSON array parse
+    const trimmed = raw.trim();
+    const start = trimmed.indexOf('[');
+    const end = trimmed.lastIndexOf(']');
+    if (start >= 0 && end > start) {
+        try {
+            const arr = JSON.parse(trimmed.slice(start, end + 1));
+            if (Array.isArray(arr)) {
+                const items = arr
+                    .filter(item => item && typeof item.content === 'string')
+                    .map(item => {
+                        let t = item.type;
+                        if (typeof t === 'string' && t.startsWith('/')) t = t.slice(1);
+                        if (!['me', 'do', 'b', 'e'].includes(t)) return null;
+                        const c = item.content.trim();
+                        return c ? { type: t, content: c } : null;
+                    })
+                    .filter(Boolean);
+                if (items.length > 0) return items;
+            }
+        } catch (_) { /* JSON incomplete, fall through */ }
+    }
+
+    // Fallback: regex line parsing
+    const lineRe = /^(?:\d+\.\s*)?\/?(me|do|b|e)\s+(.+)$/gm;
+    const results = [];
+    let match;
+    while ((match = lineRe.exec(raw)) !== null) {
+        const content = match[2].trim();
+        if (content) results.push({ type: match[1], content });
+    }
+    return results;
+}
+
+/**
+ * Render only the newly parsed items into the preview list (incremental).
+ */
+function _renderStreamPreview(texts, fromIndex) {
+    // On first item, clear the empty-state placeholder
+    if (fromIndex === 0) {
+        dom.aiPreviewList.innerHTML = '';
+    }
+
+    for (let i = fromIndex; i < texts.length; i++) {
+        const item = texts[i];
+        const card = document.createElement('div');
+        card.className = 'text-card ai-stream-card';
+        card.style.animation = 'fadeInUp 0.3s ease-out';
+        card.innerHTML = `
+            <div class="badge badge-${item.type}">/${item.type}</div>
+            <div class="text-content">${item.content}</div>
+        `;
+        dom.aiPreviewList.appendChild(card);
     }
 }
 
@@ -2998,6 +3151,7 @@ function renderAIPreview() {
     if (!Array.isArray(state.aiPreview) || state.aiPreview.length === 0) {
         dom.aiPreviewList.innerHTML = `
             <div class="empty-state small">
+                <div class="empty-icon">✨</div>
                 <p>暂无可预览内容，请重新生成</p>
             </div>`;
         return;
@@ -3646,7 +3800,7 @@ async function submitAIRewrite() {
         });
         const rewritePayload = await rewriteRes.json().catch(() => ({}));
         if (!rewriteRes.ok) {
-            showToast('重写失败: ' + formatApiErrorDetail(rewritePayload.detail, rewriteRes.status), 'error');
+            showToast('重写失败: ' + friendlyAIError(formatApiErrorDetail(rewritePayload.detail, rewriteRes.status)), 'error');
             return;
         }
 
@@ -3685,7 +3839,7 @@ async function submitAIRewrite() {
         showToast('重写已生成，请确认后再应用', 'info');
     } catch (e) {
         if (e.message !== 'AUTH_REQUIRED') {
-            showToast('重写失败: ' + e.message, 'error');
+            showToast('重写失败: ' + friendlyAIError(e.message), 'error');
         }
     } finally {
         dom.confirmAIRewrite.disabled = false;
