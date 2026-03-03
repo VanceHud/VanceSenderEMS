@@ -300,10 +300,17 @@ class QuickOverlayModule:
 
         root = self._root
         if root is not None:
-            try:
-                root.after(0, root.quit)
-            except Exception:
-                pass
+            # Try multiple approaches to signal the Tk thread to quit.
+            # root.after() and root.after_idle() are both unreliable
+            # from non-Tcl threads, so we try both as redundant signals.
+            for quit_scheduler in (
+                lambda: root.after(0, root.quit),
+                lambda: root.after_idle(root.quit),
+            ):
+                try:
+                    quit_scheduler()
+                except Exception:
+                    pass
 
         thread = self._thread
         if thread is None or thread is threading.current_thread():

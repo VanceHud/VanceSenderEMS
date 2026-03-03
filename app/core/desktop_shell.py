@@ -149,10 +149,20 @@ class _TrayController:
             return
 
     def _handle_exit(self, *_: object) -> None:
-        try:
-            self._on_exit()
-        except Exception:
-            return
+        # Run exit action in a separate thread to avoid blocking
+        # the pystray callback thread, which would deadlock if
+        # the exit path tries to join the tray thread.
+        def _do_exit() -> None:
+            try:
+                self._on_exit()
+            except Exception:
+                pass
+
+        threading.Thread(
+            target=_do_exit,
+            daemon=True,
+            name="tray-exit-worker",
+        ).start()
 
 
 def _set_desktop_window(window: object | None) -> None:
@@ -452,7 +462,10 @@ def _close_desktop_window(force_exit: bool = True) -> bool:
 
     _destroy_quick_panel_for_shutdown()
 
-    _stop_tray_controller()
+    # NOTE: Do NOT call _stop_tray_controller() here.
+    # Tray cleanup is handled by open_desktop_window()'s finally block.
+    # Stopping the tray before window.destroy() would add unnecessary
+    # delay and risk deadlocks when called from the tray thread itself.
 
     try:
         destroy_method()
@@ -560,7 +573,7 @@ def _on_desktop_window_closing() -> bool:
     """
     if _is_exit_requested():
         _destroy_quick_panel_for_shutdown()
-        _stop_tray_controller()
+        # Tray cleanup is handled by open_desktop_window()'s finally block
         return True
 
     action = _resolve_requested_close_action()
@@ -569,7 +582,7 @@ def _on_desktop_window_closing() -> bool:
 
     _destroy_quick_panel_for_shutdown()
     _set_exit_requested(True)
-    _stop_tray_controller()
+    # Tray cleanup is handled by open_desktop_window()'s finally block
     return True
 
 

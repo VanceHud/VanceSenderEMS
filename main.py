@@ -571,9 +571,17 @@ def main() -> None:
                 pass
         _DEVNULL_STREAMS.clear()
 
-        # Hard-stop: guarantee process exit even if non-daemon threads
+        # Watchdog: guarantee process exit even if non-daemon threads
         # (e.g. pystray internal message pump) are still alive.
-        os._exit(0)
+        # Give normal cleanup a few seconds, then force-terminate.
+        def _watchdog() -> None:
+            time.sleep(5)
+            os._exit(0)
+
+        watchdog = threading.Thread(
+            target=_watchdog, daemon=True, name="exit-watchdog"
+        )
+        watchdog.start()
 
 
 if __name__ == "__main__":
