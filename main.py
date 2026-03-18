@@ -575,7 +575,7 @@ def main() -> None:
         # (e.g. pystray internal message pump) are still alive.
         # Give normal cleanup a few seconds, then force-terminate.
         def _watchdog() -> None:
-            time.sleep(5)
+            time.sleep(3)
             os._exit(0)
 
         watchdog = threading.Thread(

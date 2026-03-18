@@ -467,14 +467,26 @@ def _close_desktop_window(force_exit: bool = True) -> bool:
     # Stopping the tray before window.destroy() would add unnecessary
     # delay and risk deadlocks when called from the tray thread itself.
 
-    try:
-        destroy_method()
-    except Exception:
-        _set_exit_requested(False)
-        return False
+    # Defer window.destroy() to a separate thread so the calling
+    # context (e.g. an API handler thread) can finish and return
+    # its HTTP response before the window is torn down.  A short
+    # sleep gives the response time to flush before destroy fires.
+    import time as _time_mod
 
-    _set_desktop_window(None)
-    _set_window_maximized(False)
+    def _deferred_destroy() -> None:
+        _time_mod.sleep(0.15)
+        try:
+            destroy_method()
+        except Exception:
+            pass
+        _set_desktop_window(None)
+        _set_window_maximized(False)
+
+    threading.Thread(
+        target=_deferred_destroy,
+        daemon=True,
+        name="desktop-window-deferred-destroy",
+    ).start()
     return True
 
 
