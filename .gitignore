@@ -39,3 +39,4 @@ data/presets/*.json
 nul
 Thumbs.db
 Desktop.ini
+/.agent
