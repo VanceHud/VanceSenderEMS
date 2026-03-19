@@ -38,6 +38,22 @@ def invalidate_gemini_cache() -> None:
         _gemini_cache.clear()
 
 
+# ── Model name helpers ────────────────────────────────────────────────────
+
+
+def _sanitize_model_name(model: str) -> str:
+    """Normalise user-supplied model name.
+
+    The google-genai SDK expects bare names like 'gemini-2.0-flash'.
+    Users sometimes paste 'models/gemini-2.0-flash' from the docs,
+    which causes a 404.  Strip the prefix transparently.
+    """
+    name = model.strip()
+    if name.startswith("models/"):
+        name = name[len("models/"):]
+    return name
+
+
 # ── Message conversion ───────────────────────────────────────────────────
 
 
@@ -98,6 +114,7 @@ async def gemini_generate(
         Raw text response from Gemini.
     """
     client = _get_gemini_client(api_key)
+    model = _sanitize_model_name(model)
     system_instruction, contents = _openai_messages_to_contents(messages)
 
     config = types.GenerateContentConfig(
@@ -128,6 +145,7 @@ async def gemini_generate_stream(
     Yields raw text chunks as they arrive.
     """
     client = _get_gemini_client(api_key)
+    model = _sanitize_model_name(model)
     system_instruction, contents = _openai_messages_to_contents(messages)
 
     config = types.GenerateContentConfig(
@@ -152,6 +170,7 @@ async def gemini_test(api_key: str, model: str) -> dict[str, Any]:
     Returns:
         Dict with 'success' key and either 'response' or error details.
     """
+    model = _sanitize_model_name(model)
     client = _get_gemini_client(api_key)
     try:
         response = await client.aio.models.generate_content(
@@ -161,8 +180,30 @@ async def gemini_test(api_key: str, model: str) -> dict[str, Any]:
         )
         return {"success": True, "response": response.text or ""}
     except Exception as exc:
-        return {
+        error_msg = str(exc)
+        status_code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+
+        # Provide actionable hints for common errors
+        hint = ""
+        if status_code == 404 or "404" in error_msg:
+            hint = (
+                f"模型 '{model}' 未找到。请确认："
+                "1) 模型名称正确（如 gemini-2.0-flash）；"
+                "2) API Key 有权访问该模型；"
+                "3) 你所在区域支持该模型。"
+            )
+        elif status_code == 403 or "403" in error_msg:
+            hint = "API Key 无权访问，请检查 Google AI Studio 中的项目权限。"
+        elif status_code == 400 or "400" in error_msg:
+            hint = "请求参数有误，请检查 API Key 格式是否正确。"
+
+        result: dict[str, Any] = {
             "success": False,
-            "error": str(exc),
+            "error": error_msg,
             "error_type": type(exc).__name__,
         }
+        if status_code is not None:
+            result["status_code"] = status_code
+        if hint:
+            result["hint"] = hint
+        return result

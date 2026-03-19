@@ -4398,6 +4398,53 @@ details[open] .send-history-toggle::before {
     font-size: 0.9rem;
     line-height: 1.5;
     color: var(--text-secondary);
+    position: relative;
+}
+
+.conv-tree-text-content {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.conv-tree-copy-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.4);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s, background 0.2s, border-color 0.2s, transform 0.15s;
+    padding: 0;
+    line-height: 1;
+}
+
+.conv-tree-text-line:hover .conv-tree-copy-btn {
+    opacity: 1;
+}
+
+.conv-tree-copy-btn:hover {
+    opacity: 1;
+    background: rgba(79, 209, 255, 0.15);
+    border-color: rgba(79, 209, 255, 0.4);
+    transform: scale(1.1);
+}
+
+.conv-tree-copy-btn:active {
+    transform: scale(0.95);
+}
+
+.conv-tree-copy-btn.copied {
+    opacity: 1;
+    background: rgba(52, 211, 153, 0.2);
+    border-color: rgba(52, 211, 153, 0.5);
 }
 
 .conv-tree-text-type {

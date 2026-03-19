@@ -553,10 +553,12 @@ function renderProviderTestResult(data, status) {
     }
     if (data?.request_id) lines.push(`Request ID: ${data.request_id}`);
     if (data?.response) lines.push(`Response: ${data.response}`);
+    if (data?.error) lines.push(`Error: ${data.error}`);
     if (data?.body !== undefined && data?.body !== null) {
         const bodyText = typeof data.body === 'string' ? data.body : JSON.stringify(data.body, null, 2);
         lines.push(`Body: ${bodyText}`);
     }
+    if (data?.hint) lines.push(`\n💡 ${data.hint}`);
 
     summary.textContent = ok ? '连接成功' : '连接失败';
     summary.style.color = ok ? 'var(--accent-success)' : 'var(--accent-danger)';
@@ -4411,7 +4413,7 @@ function initSettingsPanel() {
         }
         showToast('正在测试连接...', 'info');
         try {
-            const res = await apiFetch(`/ api / v1 / ai / test / ${id} `, { method: 'POST' });
+            const res = await apiFetch(`/api/v1/ai/test/${id}`, { method: 'POST' });
             const data = await res.json().catch(() => ({}));
             renderProviderTestResult(data, res.status);
             const level = data.success ? 'success' : 'error';
@@ -5297,15 +5299,45 @@ document.addEventListener('keydown', (event) => {
 
     // ── Render helpers ──────────────────────────────────────────────
 
+    function copyNodeText(btn, type, content) {
+        const text = `/${type} ${content}`;
+        navigator.clipboard.writeText(text).then(() => {
+            btn.classList.add('copied');
+            btn.textContent = '✅';
+            showToast('已复制: ' + text, 'success');
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.textContent = '📋';
+            }, 1200);
+        }).catch(() => {
+            showToast('复制失败，请手动复制', 'error');
+        });
+    }
+
     function renderTextLines(texts) {
-        return texts.map(t => {
+        return texts.map((t, i) => {
             const cls = t.type === 'me' ? 'type-me' : 'type-do';
+            const safeContent = escapeHtml(t.content);
+            const btnId = `conv-tree-copy-${Date.now()}-${i}`;
             return `
                 <div class="conv-tree-text-line">
                     <span class="conv-tree-text-type ${cls}">/${t.type}</span>
-                    <span>${escapeHtml(t.content)}</span>
+                    <span class="conv-tree-text-content">${safeContent}</span>
+                    <button id="${btnId}" class="conv-tree-copy-btn" type="button" title="复制 /${t.type} ${safeContent}">📋</button>
                 </div>`;
         }).join('');
+    }
+
+    function bindCopyButtons(container, texts) {
+        const btns = container.querySelectorAll('.conv-tree-copy-btn');
+        btns.forEach((btn, i) => {
+            if (texts[i]) {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    copyNodeText(btn, texts[i].type, texts[i].content);
+                });
+            }
+        });
     }
 
     function addNodeEntry(texts, label = '📤 我方节点') {
@@ -5317,6 +5349,7 @@ document.addEventListener('keydown', (event) => {
                 <div class="conv-tree-entry-texts">${renderTextLines(texts)}</div>
             </div>`;
         $timeline.appendChild(entry);
+        bindCopyButtons(entry, texts);
         entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
@@ -5345,6 +5378,7 @@ document.addEventListener('keydown', (event) => {
                 <div class="conv-tree-entry-texts">${renderTextLines(texts)}</div>
             </div>`;
         $timeline.appendChild(entry);
+        bindCopyButtons(entry, texts);
         entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 

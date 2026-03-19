@@ -491,19 +491,48 @@ def _close_desktop_window(force_exit: bool = True) -> bool:
 
 
 def _destroy_quick_panel_for_shutdown() -> None:
-    """Destroy quick panel window before desktop shell shutdown."""
+    """Destroy quick panel window before desktop shell shutdown.
+
+    State references are cleared immediately so no other code path
+    tries to interact with the window while it is being torn down.
+    The actual ``destroy()`` call is deferred to a background thread
+    with a short timeout to avoid deadlocking the calling thread
+    (e.g. an API handler or the pystray callback) when the WebView2
+    control is busy.
+    """
     quick_panel_window = _get_quick_panel_window()
-    if quick_panel_window is not None:
-        quick_panel_destroy = getattr(quick_panel_window, "destroy", None)
-        if callable(quick_panel_destroy):
-            try:
-                quick_panel_destroy()
-            except Exception:
-                pass
 
     _set_quick_panel_window(None)
     _set_quick_panel_window_url("")
     _set_quick_panel_return_hwnd(0)
+
+    if quick_panel_window is None:
+        return
+
+    hide_method = getattr(quick_panel_window, "hide", None)
+    if callable(hide_method):
+        try:
+            hide_method()
+        except Exception:
+            pass
+
+    quick_panel_destroy = getattr(quick_panel_window, "destroy", None)
+    if not callable(quick_panel_destroy):
+        return
+
+    def _do_destroy() -> None:
+        try:
+            quick_panel_destroy()
+        except Exception:
+            pass
+
+    t = threading.Thread(
+        target=_do_destroy,
+        daemon=True,
+        name="quick-panel-shutdown-destroy",
+    )
+    t.start()
+    t.join(timeout=1.5)
 
 
 def _launch_config_from_input(
