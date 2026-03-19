@@ -41,14 +41,21 @@ ai:
   providers:
     - id: openai
       name: OpenAI
+      type: openai
       api_base: https://api.openai.com/v1
       api_key: sk-your-openai-key
       model: gpt-4o-mini
     - id: deepseek
       name: DeepSeek
+      type: openai
       api_base: https://api.deepseek.com/v1
       api_key: sk-your-deepseek-key
       model: deepseek-chat
+    - id: gemini
+      name: Google Gemini
+      type: gemini
+      api_key: your-gemini-api-key
+      model: gemini-2.0-flash
   default_provider: openai
   system_prompt: |
     你是一个FiveM角色扮演文本生成助手。用户会描述一个场景，你需要生成一系列/me和/do命令。

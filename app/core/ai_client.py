@@ -12,6 +12,7 @@ from typing import Any, AsyncIterator
 from openai import AsyncOpenAI
 
 from app.core.config import load_config, get_provider_by_id
+from app.core.ai_gemini import gemini_generate, gemini_generate_stream, gemini_test
 
 log = logging.getLogger(__name__)
 
@@ -323,6 +324,42 @@ def _build_generate_messages(
     return messages
 
 
+# ── Provider type helpers ─────────────────────────────────────────────────
+
+
+def _is_gemini(provider: dict[str, Any]) -> bool:
+    """Check if a provider uses the native Gemini SDK."""
+    return provider.get("type") == "gemini"
+
+
+async def _call_provider(
+    provider: dict[str, Any],
+    cfg: dict[str, Any],
+    messages: list[dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+) -> str:
+    """Call a provider (Gemini or OpenAI) and return raw text."""
+    if _is_gemini(provider):
+        return await gemini_generate(
+            api_key=provider.get("api_key", ""),
+            model=provider.get("model", "gemini-2.0-flash"),
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+    # OpenAI path
+    client = _build_client(provider, cfg)
+    response = await _call_with_retry(
+        client,
+        model=provider.get("model", "gpt-4o"),
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    return (response.choices[0].message.content or "") if response.choices else ""
+
+
 # ── Public functions ──────────────────────────────────────────────────────
 
 
@@ -349,7 +386,6 @@ async def generate_texts(
     """
     cfg, provider = _resolve_provider(provider_id)
     resolved_pid = provider.get("id", "")
-    client = _build_client(provider, cfg)
     system = _get_system_prompt(cfg)
 
     user_prompt = _build_generate_user_prompt(scenario, count, text_type, style)
@@ -358,24 +394,16 @@ async def generate_texts(
     temp = temperature if temperature is not None else 0.8
 
     # Try primary provider, then fallback chain
-    providers_to_try = [(provider, client, resolved_pid)]
+    providers_to_try = [(provider, resolved_pid)]
     for fb_provider in _get_fallback_providers(cfg, exclude_id=resolved_pid):
-        fb_client = _build_client(fb_provider, cfg)
         providers_to_try.append(
-            (fb_provider, fb_client, fb_provider.get("id", ""))
+            (fb_provider, fb_provider.get("id", ""))
         )
 
     last_error: Exception | None = None
-    for prov, cli, pid in providers_to_try:
+    for prov, pid in providers_to_try:
         try:
-            response = await _call_with_retry(
-                cli,
-                model=prov.get("model", "gpt-4o"),
-                messages=messages,
-                temperature=temp,
-                max_tokens=max_tokens,
-            )
-            raw = (response.choices[0].message.content or "") if response.choices else ""
+            raw = await _call_provider(prov, cfg, messages, temp, max_tokens)
             texts = _parse_generate_output(raw)
             texts = _postprocess_texts(texts)
             if pid != resolved_pid:
@@ -400,17 +428,30 @@ async def generate_texts_stream(
 ) -> AsyncIterator[str]:
     """Streaming variant — yields raw text chunks."""
     cfg, provider = _resolve_provider(provider_id)
-    client = _build_client(provider, cfg)
     system = _get_system_prompt(cfg)
 
     user_prompt = _build_generate_user_prompt(scenario, count, text_type, style)
     max_tokens = _estimate_max_tokens(count)
     messages = _build_generate_messages(system, user_prompt, text_type)
+    temp = temperature if temperature is not None else 0.8
 
+    if _is_gemini(provider):
+        async for chunk in gemini_generate_stream(
+            api_key=provider.get("api_key", ""),
+            model=provider.get("model", "gemini-2.0-flash"),
+            messages=messages,
+            temperature=temp,
+            max_tokens=max_tokens,
+        ):
+            yield chunk
+        return
+
+    # OpenAI path
+    client = _build_client(provider, cfg)
     stream = await client.chat.completions.create(
         model=provider.get("model", "gpt-4o"),
         messages=messages,
-        temperature=temperature if temperature is not None else 0.8,
+        temperature=temp,
         max_tokens=max_tokens,
         stream=True,
     )
@@ -426,6 +467,14 @@ async def generate_texts_stream(
 async def test_provider(provider_id: str) -> dict[str, Any]:
     """Send a tiny request to verify that a provider is reachable."""
     cfg, provider = _resolve_provider(provider_id)
+
+    if _is_gemini(provider):
+        return await gemini_test(
+            api_key=provider.get("api_key", ""),
+            model=provider.get("model", "gemini-2.0-flash"),
+        )
+
+    # OpenAI path
     client = _build_client(provider, cfg)
     try:
         resp = await client.chat.completions.create(
@@ -453,7 +502,6 @@ async def rewrite_texts(
     """
     cfg, provider = _resolve_provider(provider_id)
     resolved_pid = provider.get("id", "")
-    client = _build_client(provider, cfg)
     system = _REWRITE_SYSTEM_PROMPT
 
     source_lines: list[str] = []
@@ -486,21 +534,16 @@ async def rewrite_texts(
         prompt_parts.append(f"{idx}. {line}")
 
     max_tokens = _estimate_max_tokens(len(source_lines))
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "\n".join(prompt_parts)},
+    ]
+    temp = temperature if temperature is not None else 0.7
 
-    response = await _call_with_retry(
-        client,
-        model=provider.get("model", "gpt-4o"),
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": "\n".join(prompt_parts)},
-        ],
-        temperature=temperature if temperature is not None else 0.7,
-        max_tokens=max_tokens,
-    )
+    raw = await _call_provider(provider, cfg, messages, temp, max_tokens)
 
-    if not response.choices:
+    if not raw:
         raise RuntimeError("AI重写返回格式异常，无有效响应。")
-    raw = response.choices[0].message.content or ""
     parsed = _parse_rewrite_payload(raw, expected_count=len(source_lines))
 
     rewritten: list[dict[str, str]] = []

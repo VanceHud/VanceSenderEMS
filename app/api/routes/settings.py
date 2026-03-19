@@ -36,6 +36,7 @@ from app.core.config import (
 )
 from app.api.auth import invalidate_token_cache
 from app.core.ai_client import invalidate_client_cache
+from app.core.ai_gemini import invalidate_gemini_cache
 from app.core.desktop_shell import (
     get_desktop_window_state as get_desktop_shell_state,
     has_system_tray_support,
@@ -59,7 +60,7 @@ def _build_ai_section(cfg: dict) -> dict:
     ai_section = dict(cfg.get("ai", {}))
     providers = ai_section.get("providers", [])
     ai_section["providers"] = [
-        {**p, "api_key_set": bool(p.get("api_key"))} for p in providers
+        {**p, "api_key_set": bool(p.get("api_key")), "type": p.get("type", "openai")} for p in providers
     ]
     for p in ai_section["providers"]:
         p.pop("api_key", None)
@@ -378,6 +379,7 @@ async def list_providers():
         ProviderResponse(
             id=p["id"],
             name=p.get("name", ""),
+            type=p.get("type", "openai"),
             api_base=p.get("api_base", ""),
             api_key_set=bool(p.get("api_key")),
             model=p.get("model", ""),
@@ -391,12 +393,14 @@ async def create_provider(body: ProviderCreate):
     """添加AI服务商。"""
     p = add_provider(body.model_dump())
     invalidate_client_cache()
+    invalidate_gemini_cache()
     return ProviderResponse(
         id=p["id"],
         name=p["name"],
-        api_base=p["api_base"],
+        type=p.get("type", "openai"),
+        api_base=p.get("api_base", ""),
         api_key_set=bool(p.get("api_key")),
-        model=p["model"],
+        model=p.get("model", "gpt-4o"),
     )
 
 
@@ -408,12 +412,14 @@ async def update_provider_route(provider_id: str, body: ProviderUpdate):
     if p is None:
         raise HTTPException(status_code=404, detail=f"服务商 '{provider_id}' 不存在")
     invalidate_client_cache()
+    invalidate_gemini_cache()
     return ProviderResponse(
         id=p["id"],
         name=p["name"],
-        api_base=p["api_base"],
+        type=p.get("type", "openai"),
+        api_base=p.get("api_base", ""),
         api_key_set=bool(p.get("api_key")),
-        model=p["model"],
+        model=p.get("model", "gpt-4o"),
     )
 
 
@@ -422,6 +428,7 @@ async def delete_provider_route(provider_id: str):
     """删除AI服务商。"""
     if delete_provider(provider_id):
         invalidate_client_cache()
+        invalidate_gemini_cache()
         return MessageResponse(message=f"服务商 '{provider_id}' 已删除")
     raise HTTPException(status_code=404, detail=f"服务商 '{provider_id}' 不存在")
 

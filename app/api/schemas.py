@@ -132,19 +132,72 @@ class AIRewriteResponse(BaseModel):
     provider_id: str
 
 
+# ── Conversation Tree (Advanced AI) schemas ────────────────────────────────
+
+
+class ConvTreeInitRequest(BaseModel):
+    scenario: str = Field(..., min_length=1, description="场景描述")
+    provider_id: str | None = Field(None, description="AI服务商ID")
+    temperature: float | None = Field(
+        None, ge=0.0, le=2.0, description="生成温度"
+    )
+
+
+class ConvTreeNextRequest(BaseModel):
+    scenario: str = Field(..., min_length=1, description="原始场景描述")
+    conversation_history: list[dict[str, Any]] = Field(
+        ..., description="对话历史 [{role: 'node'|'path', content: '...'}]"
+    )
+    chosen_reply: str = Field(..., min_length=1, description="对方的实际回复")
+    provider_id: str | None = Field(None, description="AI服务商ID")
+    temperature: float | None = Field(
+        None, ge=0.0, le=2.0, description="生成温度"
+    )
+
+
+class ConvTreeWrapupRequest(BaseModel):
+    scenario: str = Field(..., min_length=1, description="原始场景描述")
+    conversation_history: list[dict[str, Any]] = Field(
+        ..., description="对话历史"
+    )
+    provider_id: str | None = Field(None, description="AI服务商ID")
+    temperature: float | None = Field(
+        None, ge=0.0, le=2.0, description="生成温度"
+    )
+
+
+class ConvTreePath(BaseModel):
+    id: int
+    label: str = Field(description="简短标签")
+    content: str = Field(description="完整回复内容")
+
+
+class ConvTreeResponse(BaseModel):
+    node: list[TextLine]
+    paths: list[ConvTreePath]
+    provider_id: str
+
+
+class ConvTreeWrapupResponse(BaseModel):
+    node: list[TextLine]
+    provider_id: str
+
+
 # ── Provider schemas ───────────────────────────────────────────────────────
 
 
 class ProviderCreate(BaseModel):
     id: str | None = Field(None, description="自定义ID，留空自动生成")
     name: str = Field(..., min_length=1)
-    api_base: str = Field(..., min_length=1)
+    type: Literal["openai", "gemini"] = Field("openai", description="供应商类型")
+    api_base: str = Field("", description="API地址（OpenAI类型必填，Gemini类型无需填写）")
     api_key: str = ""
     model: str = "gpt-4o"
 
 
 class ProviderUpdate(BaseModel):
     name: str | None = None
+    type: Literal["openai", "gemini"] | None = None
     api_base: str | None = None
     api_key: str | None = None
     model: str | None = None
@@ -153,6 +206,7 @@ class ProviderUpdate(BaseModel):
 class ProviderResponse(BaseModel):
     id: str
     name: str
+    type: str = "openai"
     api_base: str
     api_key_set: bool
     model: str

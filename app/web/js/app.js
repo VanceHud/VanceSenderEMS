@@ -4391,6 +4391,8 @@ function initSettingsPanel() {
         document.getElementById('provider-modal-title').textContent = '添加服务商';
         dom.providerForm.reset();
         document.getElementById('prov-id').value = '';
+        document.getElementById('prov-type').value = 'openai';
+        updateProvTypeVisibility();
         clearProviderTestResult();
         openModal('modal-provider');
     });
@@ -4901,9 +4903,12 @@ async function fetchProviders() {
     providers.forEach(p => {
         const row = document.createElement('div');
         row.className = 'provider-row glass-card';
+        const typeLabel = p.type === 'gemini' ? 'Gemini' : 'OpenAI';
+        const typeBadgeColor = p.type === 'gemini' ? 'var(--accent-cyan)' : 'var(--accent-success)';
         row.innerHTML = `
             <div>
                 <strong>${p.name}</strong>
+                <span style="font-size:0.72rem;padding:2px 6px;border-radius:4px;background:${typeBadgeColor}22;color:${typeBadgeColor};margin-left:6px">${typeLabel}</span>
                 <div class="provider-model">${p.model}</div>
             </div>
             <div>
@@ -4939,6 +4944,7 @@ async function fetchProviders() {
 
     fillProviderSelect(dom.aiProvider);
     fillProviderSelect(dom.aiRewriteProvider);
+    fillProviderSelect(document.getElementById('conv-tree-provider'));
 
     if (dom.aiRewriteProvider && dom.aiProvider.value) {
         dom.aiRewriteProvider.value = dom.aiProvider.value;
@@ -5063,9 +5069,11 @@ async function saveAllSettings() {
 async function saveProvider() {
     const id = document.getElementById('prov-id').value;
     const key = document.getElementById('prov-key').value;
+    const provType = document.getElementById('prov-type').value;
     const data = {
         name: document.getElementById('prov-name').value,
-        api_base: document.getElementById('prov-base').value,
+        type: provType,
+        api_base: provType === 'gemini' ? '' : document.getElementById('prov-base').value,
         model: document.getElementById('prov-model').value,
     };
     if (!id || key) {
@@ -5107,13 +5115,26 @@ window.editProvider = (id) => {
     document.getElementById('provider-modal-title').textContent = '编辑服务商';
     document.getElementById('prov-id').value = p.id;
     document.getElementById('prov-name').value = p.name;
-    document.getElementById('prov-base').value = p.api_base;
+    document.getElementById('prov-type').value = p.type || 'openai';
+    document.getElementById('prov-base').value = p.api_base || '';
     document.getElementById('prov-key').value = ''; // Don't show key for security usually, or show if needed
     document.getElementById('prov-model').value = p.model;
+    updateProvTypeVisibility();
     clearProviderTestResult();
 
     openModal('modal-provider');
 };
+
+function updateProvTypeVisibility() {
+    const provType = document.getElementById('prov-type').value;
+    const baseGroup = document.getElementById('prov-base-group');
+    if (baseGroup) {
+        baseGroup.style.display = provType === 'gemini' ? 'none' : '';
+    }
+}
+
+// Bind type change event
+document.getElementById('prov-type')?.addEventListener('change', updateProvTypeVisibility);
 
 window.deleteProvider = async (id) => {
     if (!confirm('确定删除此服务商?')) return;
@@ -5205,3 +5226,327 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     closeModal();
 });
+
+// ── Conversation Tree (Advanced AI) ─────────────────────────────────────
+(function convTreeModule() {
+    const $scenario    = document.getElementById('conv-tree-scenario');
+    const $provider    = document.getElementById('conv-tree-provider');
+    const $tempSlider  = document.getElementById('conv-tree-temperature');
+    const $tempLabel   = document.getElementById('conv-tree-temp-label');
+    const $startBtn    = document.getElementById('conv-tree-start-btn');
+    const $flowArea    = document.getElementById('conv-tree-flow-area');
+    const $timeline    = document.getElementById('conv-tree-timeline');
+    const $actionArea  = document.getElementById('conv-tree-action-area');
+    const $pathsList   = document.getElementById('conv-tree-paths-list');
+    const $manualBtn   = document.getElementById('conv-tree-manual-btn');
+    const $manualInput = document.getElementById('conv-tree-manual-input');
+    const $replyText   = document.getElementById('conv-tree-reply-text');
+    const $submitReply = document.getElementById('conv-tree-submit-reply');
+    const $cancelManual= document.getElementById('conv-tree-cancel-manual');
+    const $importBtn   = document.getElementById('conv-tree-import-btn');
+    const $wrapupBtn   = document.getElementById('conv-tree-wrapup-btn');
+    const $resetBtn    = document.getElementById('conv-tree-reset-btn');
+    const $loading     = document.getElementById('conv-tree-loading');
+    const $setup       = document.getElementById('conv-tree-setup');
+
+    const treeState = {
+        scenario: '',
+        history: [],       // [{role: 'node'|'path', content: '...'}]
+        allNodes: [],      // [{type, content}] for import
+        currentPaths: [],  // [{id, label, content}]
+        phase: 'idle',     // idle | active | finished
+        loading: false,
+    };
+
+    // Temperature slider sync
+    $tempSlider.addEventListener('input', () => {
+        $tempLabel.textContent = $tempSlider.value;
+    });
+
+    function setLoading(on) {
+        treeState.loading = on;
+        $loading.classList.toggle('hidden', !on);
+        $startBtn.disabled = on;
+        $wrapupBtn.disabled = on || treeState.phase !== 'active';
+        $importBtn.disabled = treeState.allNodes.length === 0;
+        if (on) {
+            $actionArea.classList.add('hidden');
+        }
+    }
+
+    function reset() {
+        treeState.scenario = '';
+        treeState.history = [];
+        treeState.allNodes = [];
+        treeState.currentPaths = [];
+        treeState.phase = 'idle';
+        treeState.loading = false;
+        $timeline.innerHTML = '';
+        $pathsList.innerHTML = '';
+        $flowArea.classList.add('hidden');
+        $actionArea.classList.add('hidden');
+        $manualInput.classList.add('hidden');
+        $loading.classList.add('hidden');
+        $importBtn.disabled = true;
+        $wrapupBtn.disabled = true;
+        $startBtn.disabled = false;
+        $scenario.disabled = false;
+        $scenario.value = '';
+        $replyText.value = '';
+    }
+
+    // ── Render helpers ──────────────────────────────────────────────
+
+    function renderTextLines(texts) {
+        return texts.map(t => {
+            const cls = t.type === 'me' ? 'type-me' : 'type-do';
+            return `
+                <div class="conv-tree-text-line">
+                    <span class="conv-tree-text-type ${cls}">/${t.type}</span>
+                    <span>${escapeHtml(t.content)}</span>
+                </div>`;
+        }).join('');
+    }
+
+    function addNodeEntry(texts, label = '📤 我方节点') {
+        const entry = document.createElement('div');
+        entry.className = 'conv-tree-entry entry-node';
+        entry.innerHTML = `
+            <div class="conv-tree-entry-card">
+                <div class="conv-tree-entry-label">${label}</div>
+                <div class="conv-tree-entry-texts">${renderTextLines(texts)}</div>
+            </div>`;
+        $timeline.appendChild(entry);
+        entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function addPathEntry(content) {
+        const entry = document.createElement('div');
+        entry.className = 'conv-tree-entry entry-path';
+        entry.innerHTML = `
+            <div class="conv-tree-entry-card">
+                <div class="conv-tree-entry-label">📥 对方回复</div>
+                <div class="conv-tree-entry-texts">
+                    <div class="conv-tree-text-line">
+                        <span>${escapeHtml(content)}</span>
+                    </div>
+                </div>
+            </div>`;
+        $timeline.appendChild(entry);
+        entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function addWrapupEntry(texts) {
+        const entry = document.createElement('div');
+        entry.className = 'conv-tree-entry entry-wrapup';
+        entry.innerHTML = `
+            <div class="conv-tree-entry-card">
+                <div class="conv-tree-entry-label">🏁 收尾节点</div>
+                <div class="conv-tree-entry-texts">${renderTextLines(texts)}</div>
+            </div>`;
+        $timeline.appendChild(entry);
+        entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function renderPaths(paths) {
+        $pathsList.innerHTML = '';
+        paths.forEach(p => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'conv-tree-path-btn';
+            btn.innerHTML = `
+                <span class="conv-tree-path-label">${escapeHtml(p.label)}</span>
+                <span class="conv-tree-path-content">${escapeHtml(p.content)}</span>`;
+            btn.addEventListener('click', () => selectPath(p.content));
+            $pathsList.appendChild(btn);
+        });
+        treeState.currentPaths = paths;
+        $actionArea.classList.remove('hidden');
+        $manualInput.classList.add('hidden');
+    }
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    // ── API calls ───────────────────────────────────────────────────
+
+    async function initTree() {
+        const scenario = $scenario.value.trim();
+        if (!scenario) {
+            showToast('请输入场景描述', 'warning');
+            return;
+        }
+
+        treeState.scenario = scenario;
+        treeState.phase = 'active';
+        $scenario.disabled = true;
+        $flowArea.classList.remove('hidden');
+        $timeline.innerHTML = '';
+        setLoading(true);
+
+        try {
+            const res = await apiFetch('/api/v1/ai/conversation-tree/init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scenario,
+                    provider_id: $provider.value || null,
+                    temperature: parseFloat($tempSlider.value),
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail?.message || err.detail || '初始化失败');
+            }
+            const data = await res.json();
+
+            // Store node texts
+            const nodeTexts = data.node || [];
+            treeState.allNodes.push(...nodeTexts);
+            treeState.history.push({
+                role: 'node',
+                content: nodeTexts.map(t => `/${t.type} ${t.content}`).join(' | '),
+            });
+
+            addNodeEntry(nodeTexts);
+            renderPaths(data.paths || []);
+            $wrapupBtn.disabled = false;
+            $importBtn.disabled = false;
+        } catch (err) {
+            showToast(err.message, 'error');
+            treeState.phase = 'idle';
+            $scenario.disabled = false;
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function selectPath(replyContent) {
+        // Add reply to history and timeline
+        treeState.history.push({ role: 'path', content: replyContent });
+        addPathEntry(replyContent);
+        $actionArea.classList.add('hidden');
+        setLoading(true);
+
+        try {
+            const res = await apiFetch('/api/v1/ai/conversation-tree/next', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scenario: treeState.scenario,
+                    conversation_history: treeState.history,
+                    chosen_reply: replyContent,
+                    provider_id: $provider.value || null,
+                    temperature: parseFloat($tempSlider.value),
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail?.message || err.detail || '生成下一轮失败');
+            }
+            const data = await res.json();
+
+            const nodeTexts = data.node || [];
+            treeState.allNodes.push(...nodeTexts);
+            treeState.history.push({
+                role: 'node',
+                content: nodeTexts.map(t => `/${t.type} ${t.content}`).join(' | '),
+            });
+
+            addNodeEntry(nodeTexts);
+            renderPaths(data.paths || []);
+        } catch (err) {
+            showToast(err.message, 'error');
+            // Re-show action area so user can retry
+            $actionArea.classList.remove('hidden');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function wrapup() {
+        setLoading(true);
+        $actionArea.classList.add('hidden');
+
+        try {
+            const res = await apiFetch('/api/v1/ai/conversation-tree/wrapup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scenario: treeState.scenario,
+                    conversation_history: treeState.history,
+                    provider_id: $provider.value || null,
+                    temperature: parseFloat($tempSlider.value),
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail?.message || err.detail || '收尾生成失败');
+            }
+            const data = await res.json();
+
+            const wrapupTexts = data.node || [];
+            treeState.allNodes.push(...wrapupTexts);
+            treeState.history.push({
+                role: 'node',
+                content: wrapupTexts.map(t => `/${t.type} ${t.content}`).join(' | '),
+            });
+
+            addWrapupEntry(wrapupTexts);
+            treeState.phase = 'finished';
+            $wrapupBtn.disabled = true;
+            showToast('对话已收尾 ✅', 'success');
+        } catch (err) {
+            showToast(err.message, 'error');
+            $actionArea.classList.remove('hidden');
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    function importToSendList() {
+        if (treeState.allNodes.length === 0) {
+            showToast('暂无可导入的节点', 'warning');
+            return;
+        }
+        const newTexts = treeState.allNodes.map(t => ({
+            type: t.type,
+            content: t.content,
+        }));
+        state.texts.push(...newTexts);
+        renderTexts();
+        showToast(`已导入 ${newTexts.length} 条文本到发送列表`, 'success');
+    }
+
+    // ── Event listeners ─────────────────────────────────────────────
+
+    $startBtn.addEventListener('click', initTree);
+    $resetBtn.addEventListener('click', () => {
+        if (treeState.phase !== 'idle' && !confirm('确定重新开始？当前策划进度将清空。')) return;
+        reset();
+    });
+    $wrapupBtn.addEventListener('click', wrapup);
+    $importBtn.addEventListener('click', importToSendList);
+
+    $manualBtn.addEventListener('click', () => {
+        $manualInput.classList.remove('hidden');
+        $replyText.focus();
+    });
+    $cancelManual.addEventListener('click', () => {
+        $manualInput.classList.add('hidden');
+        $replyText.value = '';
+    });
+    $submitReply.addEventListener('click', () => {
+        const text = $replyText.value.trim();
+        if (!text) {
+            showToast('请输入对方的回复', 'warning');
+            return;
+        }
+        $manualInput.classList.add('hidden');
+        $replyText.value = '';
+        selectPath(text);
+    });
+})();

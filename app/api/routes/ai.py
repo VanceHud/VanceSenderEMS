@@ -10,6 +10,12 @@ from app.api.schemas import (
     AIGenerateResponse,
     AIRewriteRequest,
     AIRewriteResponse,
+    ConvTreeInitRequest,
+    ConvTreeNextRequest,
+    ConvTreePath,
+    ConvTreeResponse,
+    ConvTreeWrapupRequest,
+    ConvTreeWrapupResponse,
     MessageResponse,
     ProviderTestResponse,
     TextLine,
@@ -29,6 +35,12 @@ from app.core.ai_history import (
     toggle_star,
     delete_entry,
     clear_unstarred,
+)
+
+from app.core.ai_conversation_tree import (
+    generate_initial_tree,
+    generate_next_node,
+    generate_wrapup,
 )
 
 
@@ -274,3 +286,86 @@ async def clear_ai_history():
     """清空非收藏AI生成历史。"""
     count = clear_unstarred()
     return MessageResponse(message=f"已清空 {count} 条非收藏记录")
+
+
+# ── Conversation Tree (Advanced AI) ────────────────────────────────────────
+
+
+@router.post("/conversation-tree/init", response_model=ConvTreeResponse)
+async def conv_tree_init(body: ConvTreeInitRequest):
+    """初始化对话树：根据场景生成初始节点和预测路径。"""
+    try:
+        tree_data, resolved_pid = await generate_initial_tree(
+            scenario=body.scenario,
+            provider_id=body.provider_id,
+            temperature=body.temperature,
+        )
+        return ConvTreeResponse(
+            node=[TextLine(**item) for item in tree_data["node"]],
+            paths=[ConvTreePath(**p) for p in tree_data["paths"]],
+            provider_id=resolved_pid,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "AI对话树初始化失败",
+                **extract_api_error_details(exc, provider_id=body.provider_id),
+            },
+        )
+
+
+@router.post("/conversation-tree/next", response_model=ConvTreeResponse)
+async def conv_tree_next(body: ConvTreeNextRequest):
+    """生成下一轮对话节点和预测路径。"""
+    try:
+        tree_data, resolved_pid = await generate_next_node(
+            scenario=body.scenario,
+            conversation_history=body.conversation_history,
+            chosen_reply=body.chosen_reply,
+            provider_id=body.provider_id,
+            temperature=body.temperature,
+        )
+        return ConvTreeResponse(
+            node=[TextLine(**item) for item in tree_data["node"]],
+            paths=[ConvTreePath(**p) for p in tree_data["paths"]],
+            provider_id=resolved_pid,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "AI对话树下一轮生成失败",
+                **extract_api_error_details(exc, provider_id=body.provider_id),
+            },
+        )
+
+
+@router.post("/conversation-tree/wrapup", response_model=ConvTreeWrapupResponse)
+async def conv_tree_wrapup(body: ConvTreeWrapupRequest):
+    """生成收尾节点，优雅地结束对话。"""
+    try:
+        node_texts, resolved_pid = await generate_wrapup(
+            scenario=body.scenario,
+            conversation_history=body.conversation_history,
+            provider_id=body.provider_id,
+            temperature=body.temperature,
+        )
+        return ConvTreeWrapupResponse(
+            node=[TextLine(**item) for item in node_texts],
+            provider_id=resolved_pid,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "AI收尾生成失败",
+                **extract_api_error_details(exc, provider_id=body.provider_id),
+            },
+        )

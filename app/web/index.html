@@ -116,6 +116,20 @@
                     </span>
                     <span class="label" data-i18n="nav.ai">AI生成</span>
                 </li>
+                <li class="nav-item" data-target="panel-ai-advanced">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <title>高级AI</title>
+                            <circle cx="12" cy="5" r="3"></circle>
+                            <line x1="12" y1="8" x2="12" y2="14"></line>
+                            <circle cx="6" cy="19" r="3"></circle>
+                            <circle cx="18" cy="19" r="3"></circle>
+                            <line x1="12" y1="14" x2="6" y2="16"></line>
+                            <line x1="12" y1="14" x2="18" y2="16"></line>
+                        </svg>
+                    </span>
+                    <span class="label">高级AI</span>
+                </li>
                 <li class="nav-item" data-target="panel-presets">
                     <span class="icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -691,6 +705,99 @@
                 </details>
             </section>
 
+            <!-- Panel 3.5: Advanced AI (Conversation Tree) -->
+            <section id="panel-ai-advanced" class="panel">
+                <header class="panel-header">
+                    <h1>高级AI · 对话策划</h1>
+                </header>
+
+                <div class="ai-advanced-container">
+                    <!-- Setup Card -->
+                    <div id="conv-tree-setup" class="bento-card glass-card" style="--anim-delay: 0.1s">
+                        <h3 class="bento-sub-title">
+                            <span class="icon">🎯</span> 场景设定
+                        </h3>
+                        <div class="form-group">
+                            <label>场景描述</label>
+                            <textarea id="conv-tree-scenario" placeholder="描述你的开场场景，例如：'一名便衣警察在暗巷中跟踪嫌疑人，准备上前盘问'..."
+                                rows="4" style="resize: none;"></textarea>
+                        </div>
+                        <div class="form-row" style="gap: 12px; align-items: flex-end;">
+                            <div class="form-group" style="flex:1;">
+                                <label>AI 服务商</label>
+                                <select id="conv-tree-provider"></select>
+                            </div>
+                            <div class="form-group" style="flex:0.6;">
+                                <label>创意温度 <span id="conv-tree-temp-label" style="font-weight:400;font-size:0.82rem;color:var(--accent-cyan)">0.8</span></label>
+                                <input type="range" id="conv-tree-temperature" min="0" max="2" step="0.1" value="0.8"
+                                    style="width:100%; accent-color: var(--accent-cyan);">
+                            </div>
+                            <button id="conv-tree-start-btn" class="btn btn-primary glow-effect" type="button"
+                                style="padding: 12px 28px; white-space: nowrap;">
+                                <span class="icon">🚀</span> 开始策划
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Conversation Flow -->
+                    <div id="conv-tree-flow-area" class="bento-card glass-card hidden" style="--anim-delay: 0.2s">
+                        <div class="conv-tree-flow-header">
+                            <h3 class="bento-sub-title" style="margin-bottom:0;">
+                                <span class="icon">🌳</span> 对话流程
+                            </h3>
+                            <div class="conv-tree-flow-actions">
+                                <button id="conv-tree-import-btn" class="btn btn-sm btn-secondary" type="button" disabled>
+                                    导入到发送列表
+                                </button>
+                                <button id="conv-tree-wrapup-btn" class="btn btn-sm btn-outline" type="button" disabled>
+                                    🏁 收尾结束
+                                </button>
+                                <button id="conv-tree-reset-btn" class="btn btn-sm btn-ghost" type="button">
+                                    重新开始
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="conv-tree-timeline" class="conv-tree-timeline">
+                            <!-- Nodes and paths rendered by JS -->
+                        </div>
+
+                        <!-- Path Selection / Manual Input -->
+                        <div id="conv-tree-action-area" class="conv-tree-action-area hidden">
+                            <div class="conv-tree-action-label">
+                                <span class="icon">📨</span> 对方的回复是？
+                            </div>
+                            <div id="conv-tree-paths-list" class="conv-tree-paths-list">
+                                <!-- Predicted path buttons rendered by JS -->
+                            </div>
+                            <div class="conv-tree-manual-row">
+                                <button id="conv-tree-manual-btn" class="btn btn-sm btn-ghost" type="button">
+                                    ✏️ 手动输入对方回复
+                                </button>
+                            </div>
+                            <div id="conv-tree-manual-input" class="conv-tree-manual-input hidden">
+                                <textarea id="conv-tree-reply-text" placeholder="输入对方的实际回复..." rows="3"
+                                    style="resize: none;"></textarea>
+                                <div class="conv-tree-manual-actions">
+                                    <button id="conv-tree-submit-reply" class="btn btn-sm btn-primary" type="button">
+                                        确认并生成下一轮
+                                    </button>
+                                    <button id="conv-tree-cancel-manual" class="btn btn-sm btn-ghost" type="button">
+                                        取消
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Loading indicator -->
+                        <div id="conv-tree-loading" class="conv-tree-loading hidden">
+                            <div class="loading-spinner"></div>
+                            <span>AI 正在思考...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- Panel 4: Presets -->
             <section id="panel-presets" class="panel">
                 <header class="panel-header">
@@ -1149,8 +1256,15 @@
                 <input type="text" id="prov-name" required placeholder="例如: DeepSeek">
             </div>
             <div class="form-group">
+                <label>供应商类型</label>
+                <select id="prov-type">
+                    <option value="openai">OpenAI (兼容)</option>
+                    <option value="gemini">Google Gemini</option>
+                </select>
+            </div>
+            <div class="form-group" id="prov-base-group">
                 <label>API Base URL</label>
-                <input type="text" id="prov-base" required placeholder="https://api.example.com/v1">
+                <input type="text" id="prov-base" placeholder="https://api.example.com/v1">
             </div>
             <div class="form-group">
                 <label>API Key</label>

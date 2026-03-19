@@ -4285,7 +4285,289 @@ details[open] .send-history-toggle::before {
     }
 }
 
+/* ── Advanced AI: Conversation Tree ────────────────────────────────────── */
+
+.ai-advanced-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.conv-tree-flow-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.conv-tree-flow-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Timeline */
+.conv-tree-timeline {
+    position: relative;
+    padding: 8px 0 8px 32px;
+    max-height: 60dvh;
+    overflow-y: auto;
+}
+
+.conv-tree-timeline::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, var(--accent-cyan), rgba(79, 209, 255, 0.2));
+    border-radius: 2px;
+}
+
+/* Timeline entry (common) */
+.conv-tree-entry {
+    position: relative;
+    margin-bottom: 16px;
+    animation: fadeSlideUp 0.35s ease;
+}
+
+.conv-tree-entry::before {
+    content: '';
+    position: absolute;
+    left: -24px;
+    top: 14px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid;
+    z-index: 1;
+}
+
+/* Node entry (ours) */
+.conv-tree-entry.entry-node::before {
+    border-color: var(--accent-cyan);
+    background: rgba(79, 209, 255, 0.3);
+    box-shadow: 0 0 8px rgba(79, 209, 255, 0.4);
+}
+
+.conv-tree-entry-card {
+    padding: 14px 18px;
+    border-radius: 14px;
+    border: 1px solid;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.conv-tree-entry-card:hover {
+    transform: translateY(-1px);
+}
+
+.conv-tree-entry.entry-node .conv-tree-entry-card {
+    border-color: rgba(79, 209, 255, 0.25);
+    background: linear-gradient(135deg, rgba(79, 209, 255, 0.08), rgba(15, 23, 42, 0.6));
+    box-shadow: 0 4px 16px rgba(79, 209, 255, 0.1);
+}
+
+.conv-tree-entry-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.conv-tree-entry.entry-node .conv-tree-entry-label {
+    color: var(--accent-cyan);
+}
+
+.conv-tree-entry-texts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.conv-tree-text-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.conv-tree-text-type {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.conv-tree-text-type.type-me {
+    background: rgba(79, 209, 255, 0.18);
+    color: var(--accent-cyan);
+}
+
+.conv-tree-text-type.type-do {
+    background: rgba(250, 204, 21, 0.18);
+    color: #fde68a;
+}
+
+/* Path entry (theirs) */
+.conv-tree-entry.entry-path::before {
+    border-color: #fb923c;
+    background: rgba(251, 146, 60, 0.3);
+    box-shadow: 0 0 8px rgba(251, 146, 60, 0.4);
+}
+
+.conv-tree-entry.entry-path .conv-tree-entry-card {
+    border-color: rgba(251, 146, 60, 0.25);
+    background: linear-gradient(135deg, rgba(251, 146, 60, 0.08), rgba(15, 23, 42, 0.6));
+    box-shadow: 0 4px 16px rgba(251, 146, 60, 0.1);
+}
+
+.conv-tree-entry.entry-path .conv-tree-entry-label {
+    color: #fb923c;
+}
+
+/* Wrapup entry */
+.conv-tree-entry.entry-wrapup::before {
+    border-color: var(--accent-success);
+    background: rgba(52, 211, 153, 0.3);
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.4);
+}
+
+.conv-tree-entry.entry-wrapup .conv-tree-entry-card {
+    border-color: rgba(52, 211, 153, 0.3);
+    background: linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(15, 23, 42, 0.6));
+    box-shadow: 0 4px 16px rgba(52, 211, 153, 0.1);
+}
+
+.conv-tree-entry.entry-wrapup .conv-tree-entry-label {
+    color: var(--accent-success);
+}
+
+/* Action area */
+.conv-tree-action-area {
+    margin-top: 16px;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px dashed rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.4);
+}
+
+.conv-tree-action-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.conv-tree-paths-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.conv-tree-path-btn {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid rgba(251, 146, 60, 0.2);
+    border-radius: 12px;
+    background: rgba(251, 146, 60, 0.06);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-align: left;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    width: 100%;
+}
+
+.conv-tree-path-btn:hover {
+    border-color: rgba(251, 146, 60, 0.5);
+    background: rgba(251, 146, 60, 0.12);
+    transform: translateX(4px);
+    box-shadow: 0 4px 16px rgba(251, 146, 60, 0.15);
+}
+
+.conv-tree-path-btn:active {
+    transform: translateX(2px) scale(0.99);
+}
+
+.conv-tree-path-label {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #fb923c;
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    background: rgba(251, 146, 60, 0.15);
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.conv-tree-path-content {
+    flex: 1;
+    color: var(--text-secondary);
+}
+
+/* Manual input */
+.conv-tree-manual-row {
+    padding-top: 4px;
+}
+
+.conv-tree-manual-input {
+    margin-top: 12px;
+    animation: fadeSlideUp 0.25s ease;
+}
+
+.conv-tree-manual-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: flex-end;
+}
+
+/* Loading */
+.conv-tree-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.conv-tree-loading .loading-spinner {
+    margin: 0;
+}
+
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Keep at file end so it can override component display rules */
 .hidden {
     display: none;
-}
+}
