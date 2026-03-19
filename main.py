@@ -15,6 +15,7 @@ import importlib
 import logging
 import multiprocessing
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -357,6 +358,29 @@ def _ensure_startup_port_available(host: str, port: int) -> bool:
     return bool(checker(host, port))
 
 
+def _kill_process_tree() -> None:
+    """Force-kill all child processes (e.g. msedgewebview2.exe) of the current process.
+
+    On Windows, ``taskkill /F /T /PID`` kills the entire process tree
+    rooted at our PID, including any WebView2 browser processes spawned
+    by pywebview that would otherwise linger as orphans after
+    ``os._exit()``.
+    """
+    if sys.platform != "win32":
+        return
+
+    pid = os.getpid()
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+
 def main() -> None:
     _configure_console_encoding()
     
@@ -576,6 +600,7 @@ def main() -> None:
         # Give normal cleanup 2 seconds, then force-terminate.
         def _watchdog() -> None:
             time.sleep(2)
+            _kill_process_tree()
             os._exit(0)
 
         watchdog = threading.Thread(
