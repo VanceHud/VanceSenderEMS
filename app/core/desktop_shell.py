@@ -532,7 +532,6 @@ def _destroy_quick_panel_for_shutdown() -> None:
         name="quick-panel-shutdown-destroy",
     )
     t.start()
-    t.join(timeout=1.5)
 
 
 def _launch_config_from_input(
