@@ -358,26 +358,39 @@ def _ensure_startup_port_available(host: str, port: int) -> bool:
     return bool(checker(host, port))
 
 
-def _kill_process_tree() -> None:
-    """Force-kill all child processes (e.g. msedgewebview2.exe) of the current process.
-
-    Instead of killing ourselves with ``taskkill /F /T /PID <self>``,
-    which can terminate the parent first and orphan children that
-    ``taskkill`` hasn't reached yet, we enumerate child PIDs via
-    ``wmic`` and kill each child tree individually.
-    """
-    if sys.platform != "win32":
-        return
-
-    pid = os.getpid()
-
-    # Collect child PIDs first — killing self would orphan them.
+def _enumerate_child_pids(parent_pid: int) -> list[str]:
+    """Enumerate child process PIDs using PowerShell or wmic fallback."""
     child_pids: list[str] = []
+
+    # Strategy 1: PowerShell Get-CimInstance (modern Windows 10+).
+    try:
+        result = subprocess.run(
+            [
+                "powershell", "-NoProfile", "-Command",
+                f"Get-CimInstance Win32_Process -Filter \"ParentProcessId={parent_pid}\" "
+                f"| Select-Object -ExpandProperty ProcessId",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+        )
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if stripped.isdigit():
+                child_pids.append(stripped)
+    except Exception:
+        pass
+
+    if child_pids:
+        return child_pids
+
+    # Strategy 2: wmic (legacy, deprecated but still works on some systems).
     try:
         result = subprocess.run(
             [
                 "wmic", "process", "where",
-                f"ParentProcessId={pid}", "get", "ProcessId",
+                f"ParentProcessId={parent_pid}", "get", "ProcessId",
             ],
             capture_output=True,
             text=True,
@@ -390,23 +403,24 @@ def _kill_process_tree() -> None:
     except Exception:
         pass
 
-    # Fallback: if wmic failed or returned nothing, try tasklist.
-    if not child_pids:
-        try:
-            result = subprocess.run(
-                [
-                    "tasklist", "/FI", f"PID eq {pid}",
-                    "/FO", "CSV", "/NH",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-        except Exception:
-            pass
+    return child_pids
 
+
+def _kill_process_tree() -> None:
+    """Force-kill all child processes (e.g. msedgewebview2.exe) of the current process.
+
+    Enumerates child PIDs via PowerShell / wmic, then kills each child
+    tree individually with ``taskkill /F /T``.  Falls back to killing
+    the entire tree (including self) if enumeration fails.
+    """
+    if sys.platform != "win32":
+        return
+
+    pid = os.getpid()
+    child_pids = _enumerate_child_pids(pid)
+
+    if not child_pids:
         # Last resort — kill the whole tree including self.
-        # This is less reliable but better than doing nothing.
         try:
             subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(pid)],
@@ -645,9 +659,17 @@ def main() -> None:
                 pass
         _DEVNULL_STREAMS.clear()
 
+        # Synchronously kill child processes NOW — do not rely solely
+        # on the daemon watchdog, because if all remaining threads are
+        # daemons, Python will exit main() and kill the daemon watchdog
+        # before it ever calls _kill_process_tree().
+        _kill_process_tree()
+
         # Watchdog: guarantee process exit even if non-daemon threads
         # (e.g. pystray internal message pump) are still alive.
         # Give normal cleanup 2 seconds, then force-terminate.
+        # Also re-runs _kill_process_tree as a second pass in case
+        # child processes were re-spawned after the synchronous call.
         def _watchdog() -> None:
             time.sleep(2)
             _kill_process_tree()
