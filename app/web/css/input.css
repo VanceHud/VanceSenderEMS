@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-gray-100;
+  }
+}
+
+@layer components {
+  /* Override traditional styling with Tailwind */
+  .glass-card {
+    @apply bg-surface backdrop-blur-xl border border-white/5 shadow-glass rounded-3xl !important;
+  }
+  
+  .bento-card {
+    @apply p-6 transition-all duration-500 hover:shadow-float !important;
+  }
+  
+  .btn-primary {
+    @apply bg-gradient-to-r from-amber-600 to-amber-500 text-black font-semibold border-none shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_30px_rgba(245,158,11,0.6)] !important;
+  }
+  
+  .icon-glow {
+    @apply bg-amber-500 opacity-30 blur-xl !important;
+  }
+}

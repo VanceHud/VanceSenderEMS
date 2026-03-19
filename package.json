@@ -1,0 +1,29 @@
+{
+  "name": "vancesender",
+  "version": "1.0.0",
+  "description": "FiveM `/me` `/do` 角色扮演文本发送器，支持 AI 生成与 AI 重写。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://vancehuds@github.com/vancehuds/VanceSender.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vancehuds/VanceSender/issues"
+  },
+  "homepage": "https://github.com/vancehuds/VanceSender#readme",
+  "devDependencies": {
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19"
+  }
+}
