@@ -358,91 +358,26 @@ def _ensure_startup_port_available(host: str, port: int) -> bool:
     return bool(checker(host, port))
 
 
-def _enumerate_child_pids(parent_pid: int) -> list[str]:
-    """Enumerate child process PIDs using PowerShell or wmic fallback."""
-    child_pids: list[str] = []
-
-    # Strategy 1: PowerShell Get-CimInstance (modern Windows 10+).
-    try:
-        result = subprocess.run(
-            [
-                "powershell", "-NoProfile", "-Command",
-                f"Get-CimInstance Win32_Process -Filter \"ParentProcessId={parent_pid}\" "
-                f"| Select-Object -ExpandProperty ProcessId",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
-        )
-        for line in result.stdout.splitlines():
-            stripped = line.strip()
-            if stripped.isdigit():
-                child_pids.append(stripped)
-    except Exception:
-        pass
-
-    if child_pids:
-        return child_pids
-
-    # Strategy 2: wmic (legacy, deprecated but still works on some systems).
-    try:
-        result = subprocess.run(
-            [
-                "wmic", "process", "where",
-                f"ParentProcessId={parent_pid}", "get", "ProcessId",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        for line in result.stdout.splitlines():
-            stripped = line.strip()
-            if stripped.isdigit():
-                child_pids.append(stripped)
-    except Exception:
-        pass
-
-    return child_pids
-
-
 def _kill_process_tree() -> None:
-    """Force-kill all child processes (e.g. msedgewebview2.exe) of the current process.
+    """Force-kill the entire process tree rooted at the current process.
 
-    Enumerates child PIDs via PowerShell / wmic, then kills each child
-    tree individually with ``taskkill /F /T``.  Falls back to killing
-    the entire tree (including self) if enumeration fails.
+    Uses ``taskkill /F /T /PID`` which recursively kills all child
+    processes.  This is called in the finally block right before
+    ``os._exit(0)``, so killing ourselves here is acceptable.
     """
     if sys.platform != "win32":
         return
 
     pid = os.getpid()
-    child_pids = _enumerate_child_pids(pid)
-
-    if not child_pids:
-        # Last resort — kill the whole tree including self.
-        try:
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(pid)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=5,
-            )
-        except Exception:
-            pass
-        return
-
-    # Kill each child process tree individually.
-    for cpid in child_pids:
-        try:
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", cpid],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=3,
-            )
-        except Exception:
-            pass
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        )
+    except Exception:
+        pass
 
 
 def main() -> None:
@@ -639,8 +574,26 @@ def main() -> None:
         )
     finally:
 
-        if quick_overlay_module is not None:
-            quick_overlay_module.stop()
+        # Absolute backstop: start a non-daemon thread that will force-
+        # terminate the process after 8 seconds no matter what.  If the
+        # normal cleanup below succeeds, os._exit(0) fires first and
+        # kills this thread too.  If cleanup hangs, this fires and
+        # guarantees VanceSender.exe never lingers.
+        def _safety_exit() -> None:
+            time.sleep(8)
+            os._exit(1)
+
+        threading.Thread(
+            target=_safety_exit, daemon=False, name="safety-exit"
+        ).start()
+
+        # --- Cleanup (each step wrapped in try/except) ---
+
+        try:
+            if quick_overlay_module is not None:
+                quick_overlay_module.stop()
+        except Exception:
+            pass
 
         # Clean up runtime streams to avoid resource leaks
         for stream in _CONSOLE_STREAMS:
@@ -659,17 +612,12 @@ def main() -> None:
                 pass
         _DEVNULL_STREAMS.clear()
 
-        # Synchronously kill child processes before exiting.
-        _kill_process_tree()
+        try:
+            _kill_process_tree()
+        except Exception:
+            pass
 
-        # Force immediate process exit.  After this point all meaningful
-        # cleanup has already happened (overlay stopped, tray stopped,
-        # server stopped, streams closed, child processes killed).
-        # We must NOT rely on Python's normal interpreter shutdown here,
-        # because stale non-daemon threads (e.g. asyncio's default
-        # ThreadPoolExecutor workers left by uvicorn) will keep the
-        # process alive indefinitely.  os._exit() bypasses all of that
-        # and terminates the process immediately.
+        # Force immediate process exit.
         os._exit(0)
 
 
