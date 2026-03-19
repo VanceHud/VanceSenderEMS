@@ -123,7 +123,7 @@ class _TrayController:
             and thread.is_alive()
             and thread is not threading.current_thread()
         ):
-            thread.join(timeout=2)
+            thread.join(timeout=1.5)
 
     def _run(self) -> None:
         icon = None
@@ -448,7 +448,14 @@ def _hide_desktop_window_to_tray() -> bool:
 
 
 def _close_desktop_window(force_exit: bool = True) -> bool:
-    """Destroy desktop window and quit app process loop."""
+    """Destroy desktop window and quit app process loop.
+
+    The exit flag is set **before** any teardown so that the
+    ``closing`` callback (``_on_desktop_window_closing``) will
+    not prompt the user again.  Quick-panel teardown is done
+    synchronously (with a bounded timeout) before the main
+    window is destroyed.
+    """
     window = _get_desktop_window()
     if window is None:
         return False
@@ -460,48 +467,48 @@ def _close_desktop_window(force_exit: bool = True) -> bool:
     if force_exit:
         _set_exit_requested(True)
 
+    # Synchronous quick-panel teardown (bounded timeout inside).
     _destroy_quick_panel_for_shutdown()
 
-    # NOTE: Do NOT call _stop_tray_controller() here.
-    # Tray cleanup is handled by open_desktop_window()'s finally block.
-    # Stopping the tray before window.destroy() would add unnecessary
-    # delay and risk deadlocks when called from the tray thread itself.
+    # A minimal delay lets the calling HTTP handler flush its response
+    # before the window is torn down.  The destroy itself runs in a
+    # short-lived thread so we don't block the caller indefinitely if
+    # WebView2 hangs.  State is cleared eagerly so nothing else can
+    # reference the dying window.
+    _set_desktop_window(None)
+    _set_window_maximized(False)
 
-    # Defer window.destroy() to a separate thread so the calling
-    # context (e.g. an API handler thread) can finish and return
-    # its HTTP response before the window is torn down.  A short
-    # sleep gives the response time to flush before destroy fires.
     import time as _time_mod
 
     def _deferred_destroy() -> None:
-        _time_mod.sleep(0.15)
+        _time_mod.sleep(0.10)
         try:
             destroy_method()
         except Exception:
             pass
-        _set_desktop_window(None)
-        _set_window_maximized(False)
 
-    threading.Thread(
+    t = threading.Thread(
         target=_deferred_destroy,
         daemon=True,
         name="desktop-window-deferred-destroy",
-    ).start()
+    )
+    t.start()
+    # Wait for destroy to finish — bound to avoid infinite hang.
+    t.join(timeout=3.0)
     return True
 
 
 def _destroy_quick_panel_for_shutdown() -> None:
     """Destroy quick panel window before desktop shell shutdown.
 
-    State references are cleared immediately so no other code path
-    tries to interact with the window while it is being torn down.
-    The actual ``destroy()`` call is deferred to a background thread
-    with a short timeout to avoid deadlocking the calling thread
-    (e.g. an API handler or the pystray callback) when the WebView2
-    control is busy.
+    State references are cleared eagerly so no other code path can
+    interact with the window during teardown.  The destroy call runs
+    in a helper thread with a **bounded join** so the caller never
+    hangs indefinitely if WebView2 is unresponsive.
     """
     quick_panel_window = _get_quick_panel_window()
 
+    # Clear state eagerly — regardless of destroy outcome.
     _set_quick_panel_window(None)
     _set_quick_panel_window_url("")
     _set_quick_panel_return_hwnd(0)
@@ -532,6 +539,8 @@ def _destroy_quick_panel_for_shutdown() -> None:
         name="quick-panel-shutdown-destroy",
     )
     t.start()
+    # Wait synchronously — bound to 1.5 s so we never hang.
+    t.join(timeout=1.5)
 
 
 def _launch_config_from_input(
@@ -1019,6 +1028,10 @@ def open_desktop_window(
     try:
         webview.start(debug=False)
     finally:
+        # Deterministic sequential cleanup — order matters:
+        # 1. Quick panel (WebView2 child window)
+        # 2. Tray icon (pystray message pump thread)
+        # 3. Module state reset
         _destroy_quick_panel_for_shutdown()
         _stop_tray_controller()
         _set_desktop_window(None)

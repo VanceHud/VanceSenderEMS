@@ -1,4 +1,3 @@
-import math
 from PIL import Image, ImageDraw
 
 def draw_icon(size=256):

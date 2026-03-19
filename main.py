@@ -310,14 +310,14 @@ def _start_uvicorn_in_background(
 
 
 def _stop_uvicorn_background(server: uvicorn.Server, thread: threading.Thread) -> None:
-    """Stop background uvicorn server gracefully."""
+    """Stop background uvicorn server aggressively."""
     server.should_exit = True
+    setattr(server, "force_exit", True)
     if thread.is_alive():
-        thread.join(timeout=5)
+        thread.join(timeout=2)
 
     if thread.is_alive():
-        setattr(server, "force_exit", True)
-        thread.join(timeout=2)
+        thread.join(timeout=1)
 
 
 def _open_urls_in_browser(urls: list[str], delay_seconds: float = 0.9) -> None:
@@ -573,9 +573,9 @@ def main() -> None:
 
         # Watchdog: guarantee process exit even if non-daemon threads
         # (e.g. pystray internal message pump) are still alive.
-        # Give normal cleanup a few seconds, then force-terminate.
+        # Give normal cleanup 2 seconds, then force-terminate.
         def _watchdog() -> None:
-            time.sleep(3)
+            time.sleep(2)
             os._exit(0)
 
         watchdog = threading.Thread(

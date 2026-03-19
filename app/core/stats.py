@@ -11,7 +11,6 @@ import os
 import tempfile
 import threading
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from app.core.config import DATA_DIR
