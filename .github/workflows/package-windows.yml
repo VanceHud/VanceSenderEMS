@@ -26,10 +26,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -61,7 +61,7 @@ jobs:
           Compress-Archive -Path .\dist\VanceSender -DestinationPath .\dist\VanceSender-windows-x64.zip -Force
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: VanceSender-windows-x64
           path: dist/VanceSender-windows-x64.zip
