@@ -659,26 +659,18 @@ def main() -> None:
                 pass
         _DEVNULL_STREAMS.clear()
 
-        # Synchronously kill child processes NOW — do not rely solely
-        # on the daemon watchdog, because if all remaining threads are
-        # daemons, Python will exit main() and kill the daemon watchdog
-        # before it ever calls _kill_process_tree().
+        # Synchronously kill child processes before exiting.
         _kill_process_tree()
 
-        # Watchdog: guarantee process exit even if non-daemon threads
-        # (e.g. pystray internal message pump) are still alive.
-        # Give normal cleanup 2 seconds, then force-terminate.
-        # Also re-runs _kill_process_tree as a second pass in case
-        # child processes were re-spawned after the synchronous call.
-        def _watchdog() -> None:
-            time.sleep(2)
-            _kill_process_tree()
-            os._exit(0)
-
-        watchdog = threading.Thread(
-            target=_watchdog, daemon=True, name="exit-watchdog"
-        )
-        watchdog.start()
+        # Force immediate process exit.  After this point all meaningful
+        # cleanup has already happened (overlay stopped, tray stopped,
+        # server stopped, streams closed, child processes killed).
+        # We must NOT rely on Python's normal interpreter shutdown here,
+        # because stale non-daemon threads (e.g. asyncio's default
+        # ThreadPoolExecutor workers left by uvicorn) will keep the
+        # process alive indefinitely.  os._exit() bypasses all of that
+        # and terminates the process immediately.
+        os._exit(0)
 
 
 if __name__ == "__main__":
