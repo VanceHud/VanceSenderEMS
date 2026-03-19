@@ -361,24 +361,74 @@ def _ensure_startup_port_available(host: str, port: int) -> bool:
 def _kill_process_tree() -> None:
     """Force-kill all child processes (e.g. msedgewebview2.exe) of the current process.
 
-    On Windows, ``taskkill /F /T /PID`` kills the entire process tree
-    rooted at our PID, including any WebView2 browser processes spawned
-    by pywebview that would otherwise linger as orphans after
-    ``os._exit()``.
+    Instead of killing ourselves with ``taskkill /F /T /PID <self>``,
+    which can terminate the parent first and orphan children that
+    ``taskkill`` hasn't reached yet, we enumerate child PIDs via
+    ``wmic`` and kill each child tree individually.
     """
     if sys.platform != "win32":
         return
 
     pid = os.getpid()
+
+    # Collect child PIDs first — killing self would orphan them.
+    child_pids: list[str] = []
     try:
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(pid)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+        result = subprocess.run(
+            [
+                "wmic", "process", "where",
+                f"ParentProcessId={pid}", "get", "ProcessId",
+            ],
+            capture_output=True,
+            text=True,
             timeout=5,
         )
+        for line in result.stdout.splitlines():
+            stripped = line.strip()
+            if stripped.isdigit():
+                child_pids.append(stripped)
     except Exception:
         pass
+
+    # Fallback: if wmic failed or returned nothing, try tasklist.
+    if not child_pids:
+        try:
+            result = subprocess.run(
+                [
+                    "tasklist", "/FI", f"PID eq {pid}",
+                    "/FO", "CSV", "/NH",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except Exception:
+            pass
+
+        # Last resort — kill the whole tree including self.
+        # This is less reliable but better than doing nothing.
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            )
+        except Exception:
+            pass
+        return
+
+    # Kill each child process tree individually.
+    for cpid in child_pids:
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", cpid],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+            )
+        except Exception:
+            pass
 
 
 def main() -> None:

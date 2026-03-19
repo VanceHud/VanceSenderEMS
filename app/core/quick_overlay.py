@@ -314,18 +314,31 @@ class QuickOverlayModule:
 
         thread = self._thread
         if thread is None or thread is threading.current_thread():
+            # Even without a joinable thread, destroy root to release
+            # Win32 window handles and prevent leaked processes.
+            if root is not None:
+                try:
+                    root.destroy()
+                except Exception:
+                    pass
+                self._root = None
             return
 
         if thread.is_alive():
             thread.join(timeout=2.5)
 
-        # If thread is still alive, root.quit via after() likely failed
-        # due to cross-thread Tcl issues — forcefully destroy the root
-        if thread.is_alive() and root is not None:
+        # Always destroy root — not just when thread hangs.
+        # This ensures Win32 window handles are released even when
+        # root.quit() succeeded but Tk internals haven't fully stopped.
+        if root is not None:
             try:
                 root.destroy()
             except Exception:
                 pass
+            self._root = None
+
+        # Give the thread a final chance to exit after root destruction.
+        if thread.is_alive():
             thread.join(timeout=1.5)
 
         if not thread.is_alive():
