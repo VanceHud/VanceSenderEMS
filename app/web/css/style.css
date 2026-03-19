@@ -1032,7 +1032,10 @@ body.quick-panel-mode .toast-container {
     display: flex;
     align-items: center;
     gap: 16px;
-    height: 100%;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    word-break: break-word;
 }
 
 .empty-state-icon {
@@ -4642,6 +4645,8 @@ details[open] .send-history-toggle::before {
     padding: 24px;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .mac-glass-card {
