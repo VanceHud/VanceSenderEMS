@@ -28,6 +28,8 @@ _TREE_INIT_SYSTEM = (
     "**绝对不能**替对方角色做出任何动作、表情或决定。\n"
     "- 第二条 /do：向对方角色提出一个开放性的互动问题或情境引导，"
     "方便对方自然回复和互动（例如：'你似乎有话要说？'、'面前的人正等待你的回应'）。\n"
+    "- 如果用户提供了「剧情风格」，你生成的所有文本必须**严格遵循该风格的笔触和氛围**，"
+    "包括用词、节奏、情绪基调。\n"
     "- 预测路径应是对方角色可能发出的 /me 或 /do，覆盖不同可能性（如配合、抗拒、中立）。\n"
     "- 每条文本不超过80个字符。\n\n"
     "输出格式（必须严格遵守，只输出JSON，不要其他文字）：\n"
@@ -47,6 +49,10 @@ _TREE_NEXT_SYSTEM = (
     "方便对方自然回复和互动。\n"
     "- 严禁替他人写动作、心理、决定。\n"
     "- 节点文本应自然衔接对方的回复，推进情节发展。\n"
+    "- 如果用户提供了「剧情倾向」，你生成的节点和路径应**自然地朝该方向引导**，"
+    "但不要生硬突兀，要保持角色扮演的真实感。\n"
+    "- 如果用户提供了「剧情风格」，你生成的所有文本必须**严格遵循该风格的笔触和氛围**，"
+    "包括用词、节奏、情绪基调。\n"
     "- 预测路径应覆盖不同可能性（如配合、抗拒、意外转折）。\n"
     "- 每条文本不超过80个字符。\n\n"
     "输出格式（必须严格遵守，只输出JSON）：\n"
@@ -75,9 +81,16 @@ def _format_history_for_prompt(
     scenario: str,
     history: list[dict[str, Any]],
     chosen_reply: str | None = None,
+    plot_tendency: str | None = None,
+    plot_style: str | None = None,
 ) -> str:
     """Build a user prompt from scenario, conversation history, and optional new reply."""
-    parts: list[str] = [f"原始场景：{scenario}", "", "对话历史："]
+    parts: list[str] = [f"原始场景：{scenario}"]
+
+    if plot_style and plot_style.strip():
+        parts.append(f"剧情风格：{plot_style.strip()}")
+
+    parts.extend(["", "对话历史："])
 
     for entry in history:
         role = entry.get("role", "")
@@ -89,6 +102,8 @@ def _format_history_for_prompt(
 
     if chosen_reply:
         parts.append(f"\n对方最新回复：{chosen_reply}")
+        if plot_tendency and plot_tendency.strip():
+            parts.append(f"\n剧情倾向：{plot_tendency.strip()}")
         parts.append("\n请根据以上对话历史和对方最新回复，生成下一轮我方节点和预测路径。")
     else:
         parts.append("\n请根据以上对话历史，生成收尾节点。")
@@ -179,6 +194,7 @@ async def generate_initial_tree(
     scenario: str,
     provider_id: str | None = None,
     temperature: float | None = None,
+    plot_style: str | None = None,
 ) -> tuple[dict[str, Any], str]:
     """Generate the initial node + predicted paths for a scenario.
 
@@ -189,9 +205,14 @@ async def generate_initial_tree(
     cfg, provider = _resolve_provider(provider_id)
     resolved_pid = provider.get("id", "")
 
+    user_parts = [f"场景描述：{scenario}"]
+    if plot_style and plot_style.strip():
+        user_parts.append(f"剧情风格：{plot_style.strip()}")
+    user_parts.append("\n请生成初始节点和预测路径。")
+
     messages = [
         {"role": "system", "content": _TREE_INIT_SYSTEM},
-        {"role": "user", "content": f"场景描述：{scenario}\n\n请生成初始节点和预测路径。"},
+        {"role": "user", "content": "\n".join(user_parts)},
     ]
 
     temp = temperature if temperature is not None else 0.8
@@ -223,6 +244,8 @@ async def generate_next_node(
     chosen_reply: str,
     provider_id: str | None = None,
     temperature: float | None = None,
+    plot_tendency: str | None = None,
+    plot_style: str | None = None,
 ) -> tuple[dict[str, Any], str]:
     """Generate the next node + paths based on conversation history and the other party's reply.
 
@@ -232,7 +255,7 @@ async def generate_next_node(
     cfg, provider = _resolve_provider(provider_id)
     resolved_pid = provider.get("id", "")
 
-    user_prompt = _format_history_for_prompt(scenario, conversation_history, chosen_reply)
+    user_prompt = _format_history_for_prompt(scenario, conversation_history, chosen_reply, plot_tendency, plot_style)
     messages = [
         {"role": "system", "content": _TREE_NEXT_SYSTEM},
         {"role": "user", "content": user_prompt},

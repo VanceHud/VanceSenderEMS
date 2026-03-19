@@ -724,6 +724,11 @@
                             <textarea id="conv-tree-scenario" placeholder="描述你的开场场景，例如：'一名便衣警察在暗巷中跟踪嫌疑人，准备上前盘问'..."
                                 rows="4" style="resize: none;"></textarea>
                         </div>
+                        <div class="form-group">
+                            <label>剧情风格 <span class="hint" style="font-weight:400;font-size:0.8rem;color:var(--text-muted)">（可选，全程生效）</span></label>
+                            <input id="conv-tree-plot-style" type="text"
+                                placeholder="例如：冷峻电影感、黑色幽默、温馨日系日常、紧张悬疑">
+                        </div>
                         <div class="form-row" style="gap: 12px; align-items: flex-end;">
                             <div class="form-group" style="flex:1;">
                                 <label>AI 服务商</label>
@@ -748,6 +753,17 @@
                                 <span class="icon">🌳</span> 对话流程
                             </h3>
                             <div class="conv-tree-flow-actions">
+                                <div class="conv-tree-branch-switcher hidden" id="conv-tree-branch-switcher">
+                                    <label class="conv-tree-branch-label" for="conv-tree-branch-select">
+                                        <span class="icon" style="font-size: 0.85rem;">🔀</span> 分支
+                                    </label>
+                                    <select id="conv-tree-branch-select" class="select-sm" aria-label="切换分支">
+                                        <option value="0">主线</option>
+                                    </select>
+                                    <button id="conv-tree-delete-branch-btn" class="btn btn-sm mac-btn-danger hidden" type="button" title="删除当前分支">
+                                        🗑️
+                                    </button>
+                                </div>
                                 <button id="conv-tree-import-btn" class="btn btn-sm mac-btn-secondary" type="button" disabled>
                                     导入到发送列表
                                 </button>
@@ -768,6 +784,16 @@
                         <div id="conv-tree-action-area" class="conv-tree-action-area hidden">
                             <div class="conv-tree-action-label">
                                 <span class="icon">📨</span> 对方的回复是？
+                            </div>
+                            <div class="conv-tree-plot-tendency-row">
+                                <label class="conv-tree-plot-tendency-label" for="conv-tree-plot-tendency">
+                                    <span class="icon" style="font-size: 0.85rem;">🎭</span>
+                                    剧情倾向 <span class="hint" style="font-weight:400;font-size:0.78rem;color:var(--text-muted)">（可选）</span>
+                                </label>
+                                <textarea id="conv-tree-plot-tendency"
+                                    placeholder="输入你希望剧情发展的方向，如'局面升级'、'出现转折'、'对方态度软化'..."
+                                    rows="2"
+                                    style="resize: none; font-size: 0.85rem;"></textarea>
                             </div>
                             <div id="conv-tree-paths-list" class="conv-tree-paths-list">
                                 <!-- Predicted path buttons rendered by JS -->

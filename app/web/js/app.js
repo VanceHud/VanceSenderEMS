@@ -5229,7 +5229,7 @@ document.addEventListener('keydown', (event) => {
     closeModal();
 });
 
-// ── Conversation Tree (Advanced AI) ─────────────────────────────────────
+// ── Conversation Tree (Advanced AI) — Multi-Branch ──────────────────────
 (function convTreeModule() {
     const $scenario    = document.getElementById('conv-tree-scenario');
     const $provider    = document.getElementById('conv-tree-provider');
@@ -5250,15 +5250,223 @@ document.addEventListener('keydown', (event) => {
     const $resetBtn    = document.getElementById('conv-tree-reset-btn');
     const $loading     = document.getElementById('conv-tree-loading');
     const $setup       = document.getElementById('conv-tree-setup');
+    const $plotTendency= document.getElementById('conv-tree-plot-tendency');
+    const $plotStyle   = document.getElementById('conv-tree-plot-style');
+
+    // Branch UI elements
+    const $branchSwitcher = document.getElementById('conv-tree-branch-switcher');
+    const $branchSelect   = document.getElementById('conv-tree-branch-select');
+    const $deleteBranchBtn= document.getElementById('conv-tree-delete-branch-btn');
+
+    function createEmptyBranch(id, name, forkPoint) {
+        return {
+            id,
+            name,
+            forkPoint: forkPoint || null,
+            history: [],
+            allNodes: [],
+            currentPaths: [],
+            timelineHtml: '',
+            phase: 'active',
+        };
+    }
 
     const treeState = {
         scenario: '',
-        history: [],       // [{role: 'node'|'path', content: '...'}]
-        allNodes: [],      // [{type, content}] for import
-        currentPaths: [],  // [{id, label, content}]
-        phase: 'idle',     // idle | active | finished
+        branches: [],
+        activeBranchId: 0,
+        nextBranchId: 1,
         loading: false,
+        globalPhase: 'idle', // idle | active
     };
+
+    // ── Branch helpers ──────────────────────────────────────────────
+
+    function getActiveBranch() {
+        return treeState.branches.find(b => b.id === treeState.activeBranchId) || null;
+    }
+
+    function getBranchById(id) {
+        return treeState.branches.find(b => b.id === id) || null;
+    }
+
+    function saveTimelineSnapshot() {
+        const branch = getActiveBranch();
+        if (branch) {
+            branch.timelineHtml = $timeline.innerHTML;
+        }
+    }
+
+    function restoreTimeline(branch) {
+        $timeline.innerHTML = branch.timelineHtml || '';
+        // Re-bind copy + branch buttons
+        rebindTimelineButtons();
+    }
+
+    function rebindTimelineButtons() {
+        // Re-bind copy buttons
+        $timeline.querySelectorAll('.conv-tree-entry').forEach(entry => {
+            const textsData = entry.getAttribute('data-texts');
+            if (textsData) {
+                try {
+                    const texts = JSON.parse(textsData);
+                    bindCopyButtons(entry, texts);
+                } catch (e) { /* ignore */ }
+            }
+            // Re-bind branch buttons
+            const branchBtn = entry.querySelector('.conv-tree-branch-btn');
+            const entryIndex = entry.getAttribute('data-entry-index');
+            if (branchBtn && entryIndex !== null) {
+                branchBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    createBranch(parseInt(entryIndex, 10));
+                };
+            }
+        });
+    }
+
+    function updateBranchUI() {
+        if (treeState.branches.length <= 1) {
+            $branchSwitcher.classList.add('hidden');
+            return;
+        }
+
+        $branchSwitcher.classList.remove('hidden');
+        const currentVal = $branchSelect.value;
+        $branchSelect.innerHTML = '';
+        treeState.branches.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = String(b.id);
+            opt.textContent = b.name;
+            if (b.phase === 'finished') opt.textContent += ' ✅';
+            $branchSelect.appendChild(opt);
+        });
+        $branchSelect.value = String(treeState.activeBranchId);
+
+        // Show delete button for non-main branches
+        $deleteBranchBtn.classList.toggle('hidden', treeState.activeBranchId === 0);
+    }
+
+    function updateActionAreaForBranch() {
+        const branch = getActiveBranch();
+        if (!branch) return;
+
+        if (branch.phase === 'finished') {
+            $actionArea.classList.add('hidden');
+            $wrapupBtn.disabled = true;
+        } else if (branch.currentPaths.length > 0) {
+            renderPaths(branch.currentPaths);
+            $wrapupBtn.disabled = false;
+        } else {
+            $actionArea.classList.add('hidden');
+            $wrapupBtn.disabled = false;
+        }
+        $importBtn.disabled = branch.allNodes.length === 0;
+    }
+
+    // ── Branch operations ───────────────────────────────────────────
+
+    function createBranch(atEntryIndex) {
+        const sourceBranch = getActiveBranch();
+        if (!sourceBranch) return;
+
+        // Save current branch timeline before switching
+        saveTimelineSnapshot();
+
+        // Determine how many history entries and allNodes to keep
+        // Each node entry increments entryIndex. We need to find the corresponding
+        // history/allNodes cut points from the timeline entries.
+        const entries = $timeline.querySelectorAll('.conv-tree-entry');
+        let historyCutLen = 0;
+        let nodesCutLen = 0;
+        let pathsToRestore = [];
+
+        for (let i = 0; i <= atEntryIndex && i < entries.length; i++) {
+            const entry = entries[i];
+            if (entry.classList.contains('entry-node') || entry.classList.contains('entry-wrapup')) {
+                historyCutLen++;
+                const textsData = entry.getAttribute('data-texts');
+                if (textsData) {
+                    try {
+                        nodesCutLen += JSON.parse(textsData).length;
+                    } catch (e) { /* ignore */ }
+                }
+                // Get the paths that were available AFTER this node
+                const pathsData = entry.getAttribute('data-paths-after');
+                if (pathsData) {
+                    try {
+                        pathsToRestore = JSON.parse(pathsData);
+                    } catch (e) { pathsToRestore = []; }
+                }
+            } else if (entry.classList.contains('entry-path')) {
+                historyCutLen++;
+            }
+        }
+
+        // Create new branch
+        const newBranch = createEmptyBranch(
+            treeState.nextBranchId++,
+            `分支 ${treeState.branches.length}`,
+            { branchId: sourceBranch.id, atEntryIndex }
+        );
+        newBranch.history = JSON.parse(JSON.stringify(sourceBranch.history.slice(0, historyCutLen)));
+        newBranch.allNodes = JSON.parse(JSON.stringify(sourceBranch.allNodes.slice(0, nodesCutLen)));
+        newBranch.currentPaths = pathsToRestore;
+
+        // Build truncated timeline HTML for new branch
+        const tempDiv = document.createElement('div');
+        for (let i = 0; i <= atEntryIndex && i < entries.length; i++) {
+            tempDiv.appendChild(entries[i].cloneNode(true));
+        }
+        newBranch.timelineHtml = tempDiv.innerHTML;
+
+        treeState.branches.push(newBranch);
+
+        // Switch to new branch
+        treeState.activeBranchId = newBranch.id;
+        restoreTimeline(newBranch);
+        updateBranchUI();
+        updateActionAreaForBranch();
+
+        showToast(`已创建 "${newBranch.name}" — 从节点 #${atEntryIndex + 1} 分支`, 'success');
+    }
+
+    function switchBranch(branchId) {
+        if (branchId === treeState.activeBranchId) return;
+
+        const targetBranch = getBranchById(branchId);
+        if (!targetBranch) return;
+
+        // Save current timeline
+        saveTimelineSnapshot();
+
+        treeState.activeBranchId = branchId;
+        restoreTimeline(targetBranch);
+        updateBranchUI();
+        updateActionAreaForBranch();
+        $manualInput.classList.add('hidden');
+        $replyText.value = '';
+        if ($plotTendency) $plotTendency.value = '';
+    }
+
+    function deleteBranch() {
+        if (treeState.activeBranchId === 0) {
+            showToast('主线分支不可删除', 'warning');
+            return;
+        }
+        const branchName = getActiveBranch()?.name || '';
+        if (!confirm(`确定删除分支 "${branchName}"？`)) return;
+
+        treeState.branches = treeState.branches.filter(b => b.id !== treeState.activeBranchId);
+        treeState.activeBranchId = 0;
+        const mainBranch = getBranchById(0);
+        if (mainBranch) {
+            restoreTimeline(mainBranch);
+        }
+        updateBranchUI();
+        updateActionAreaForBranch();
+        showToast(`已删除分支 "${branchName}"`, 'success');
+    }
 
     // Temperature slider sync
     $tempSlider.addEventListener('input', () => {
@@ -5269,8 +5477,9 @@ document.addEventListener('keydown', (event) => {
         treeState.loading = on;
         $loading.classList.toggle('hidden', !on);
         $startBtn.disabled = on;
-        $wrapupBtn.disabled = on || treeState.phase !== 'active';
-        $importBtn.disabled = treeState.allNodes.length === 0;
+        const branch = getActiveBranch();
+        $wrapupBtn.disabled = on || !branch || branch.phase !== 'active';
+        $importBtn.disabled = !branch || branch.allNodes.length === 0;
         if (on) {
             $actionArea.classList.add('hidden');
         }
@@ -5278,11 +5487,11 @@ document.addEventListener('keydown', (event) => {
 
     function reset() {
         treeState.scenario = '';
-        treeState.history = [];
-        treeState.allNodes = [];
-        treeState.currentPaths = [];
-        treeState.phase = 'idle';
+        treeState.branches = [];
+        treeState.activeBranchId = 0;
+        treeState.nextBranchId = 1;
         treeState.loading = false;
+        treeState.globalPhase = 'idle';
         $timeline.innerHTML = '';
         $pathsList.innerHTML = '';
         $flowArea.classList.add('hidden');
@@ -5295,6 +5504,13 @@ document.addEventListener('keydown', (event) => {
         $scenario.disabled = false;
         $scenario.value = '';
         $replyText.value = '';
+        if ($plotTendency) $plotTendency.value = '';
+        if ($plotStyle) {
+            $plotStyle.value = '';
+            $plotStyle.disabled = false;
+        }
+        $branchSwitcher.classList.add('hidden');
+        $branchSelect.innerHTML = '<option value="0">主线</option>';
     }
 
     // ── Render helpers ──────────────────────────────────────────────
@@ -5340,22 +5556,45 @@ document.addEventListener('keydown', (event) => {
         });
     }
 
-    function addNodeEntry(texts, label = '📤 我方节点') {
+    function getEntryIndex() {
+        return $timeline.querySelectorAll('.conv-tree-entry').length;
+    }
+
+    function addNodeEntry(texts, currentPaths, label = '📤 我方节点') {
+        const entryIndex = getEntryIndex();
         const entry = document.createElement('div');
         entry.className = 'conv-tree-entry entry-node';
+        entry.setAttribute('data-entry-index', String(entryIndex));
+        entry.setAttribute('data-texts', JSON.stringify(texts));
+        if (currentPaths && currentPaths.length > 0) {
+            entry.setAttribute('data-paths-after', JSON.stringify(currentPaths));
+        }
         entry.innerHTML = `
-            <div class="conv-tree-entry-card">
+            <div class="conv-tree-entry-card" style="position:relative;">
                 <div class="conv-tree-entry-label">${label}</div>
                 <div class="conv-tree-entry-texts">${renderTextLines(texts)}</div>
+                <button class="conv-tree-branch-btn" type="button" title="从这里创建分支">🔀</button>
             </div>`;
         $timeline.appendChild(entry);
         bindCopyButtons(entry, texts);
+
+        // Bind branch button
+        const branchBtn = entry.querySelector('.conv-tree-branch-btn');
+        if (branchBtn) {
+            branchBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                createBranch(entryIndex);
+            });
+        }
+
         entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     function addPathEntry(content) {
+        const entryIndex = getEntryIndex();
         const entry = document.createElement('div');
         entry.className = 'conv-tree-entry entry-path';
+        entry.setAttribute('data-entry-index', String(entryIndex));
         entry.innerHTML = `
             <div class="conv-tree-entry-card">
                 <div class="conv-tree-entry-label">📥 对方回复</div>
@@ -5370,8 +5609,11 @@ document.addEventListener('keydown', (event) => {
     }
 
     function addWrapupEntry(texts) {
+        const entryIndex = getEntryIndex();
         const entry = document.createElement('div');
         entry.className = 'conv-tree-entry entry-wrapup';
+        entry.setAttribute('data-entry-index', String(entryIndex));
+        entry.setAttribute('data-texts', JSON.stringify(texts));
         entry.innerHTML = `
             <div class="conv-tree-entry-card">
                 <div class="conv-tree-entry-label">🏁 收尾节点</div>
@@ -5394,7 +5636,8 @@ document.addEventListener('keydown', (event) => {
             btn.addEventListener('click', () => selectPath(p.content));
             $pathsList.appendChild(btn);
         });
-        treeState.currentPaths = paths;
+        const branch = getActiveBranch();
+        if (branch) branch.currentPaths = paths;
         $actionArea.classList.remove('hidden');
         $manualInput.classList.add('hidden');
     }
@@ -5415,10 +5658,19 @@ document.addEventListener('keydown', (event) => {
         }
 
         treeState.scenario = scenario;
-        treeState.phase = 'active';
+        treeState.globalPhase = 'active';
+
+        // Create main branch
+        const mainBranch = createEmptyBranch(0, '主线', null);
+        treeState.branches = [mainBranch];
+        treeState.activeBranchId = 0;
+        treeState.nextBranchId = 1;
+
         $scenario.disabled = true;
+        if ($plotStyle) $plotStyle.disabled = true;
         $flowArea.classList.remove('hidden');
         $timeline.innerHTML = '';
+        $branchSwitcher.classList.add('hidden');
         setLoading(true);
 
         try {
@@ -5427,6 +5679,7 @@ document.addEventListener('keydown', (event) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     scenario,
+                    plot_style: ($plotStyle && $plotStyle.value.trim()) || null,
                     provider_id: $provider.value || null,
                     temperature: parseFloat($tempSlider.value),
                 }),
@@ -5437,30 +5690,43 @@ document.addEventListener('keydown', (event) => {
             }
             const data = await res.json();
 
-            // Store node texts
+            const branch = getActiveBranch();
             const nodeTexts = data.node || [];
-            treeState.allNodes.push(...nodeTexts);
-            treeState.history.push({
+            branch.allNodes.push(...nodeTexts);
+            branch.history.push({
                 role: 'node',
                 content: nodeTexts.map(t => `/${t.type} ${t.content}`).join(' | '),
             });
 
-            addNodeEntry(nodeTexts);
-            renderPaths(data.paths || []);
+            const paths = data.paths || [];
+            addNodeEntry(nodeTexts, paths);
+            renderPaths(paths);
             $wrapupBtn.disabled = false;
             $importBtn.disabled = false;
+
+            // Save initial state
+            saveTimelineSnapshot();
         } catch (err) {
             showToast(err.message, 'error');
-            treeState.phase = 'idle';
+            treeState.globalPhase = 'idle';
+            treeState.branches = [];
             $scenario.disabled = false;
+            if ($plotStyle) $plotStyle.disabled = false;
         } finally {
             setLoading(false);
         }
     }
 
     async function selectPath(replyContent) {
+        const branch = getActiveBranch();
+        if (!branch) return;
+
+        // Read plot tendency before clearing action area
+        const plotTendency = $plotTendency ? $plotTendency.value.trim() : '';
+        if ($plotTendency) $plotTendency.value = '';
+
         // Add reply to history and timeline
-        treeState.history.push({ role: 'path', content: replyContent });
+        branch.history.push({ role: 'path', content: replyContent });
         addPathEntry(replyContent);
         $actionArea.classList.add('hidden');
         setLoading(true);
@@ -5471,8 +5737,10 @@ document.addEventListener('keydown', (event) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     scenario: treeState.scenario,
-                    conversation_history: treeState.history,
+                    conversation_history: branch.history,
                     chosen_reply: replyContent,
+                    plot_tendency: plotTendency || null,
+                    plot_style: ($plotStyle && $plotStyle.value.trim()) || null,
                     provider_id: $provider.value || null,
                     temperature: parseFloat($tempSlider.value),
                 }),
@@ -5484,14 +5752,18 @@ document.addEventListener('keydown', (event) => {
             const data = await res.json();
 
             const nodeTexts = data.node || [];
-            treeState.allNodes.push(...nodeTexts);
-            treeState.history.push({
+            branch.allNodes.push(...nodeTexts);
+            branch.history.push({
                 role: 'node',
                 content: nodeTexts.map(t => `/${t.type} ${t.content}`).join(' | '),
             });
 
-            addNodeEntry(nodeTexts);
-            renderPaths(data.paths || []);
+            const paths = data.paths || [];
+            addNodeEntry(nodeTexts, paths);
+            renderPaths(paths);
+
+            // Save snapshot after update
+            saveTimelineSnapshot();
         } catch (err) {
             showToast(err.message, 'error');
             // Re-show action area so user can retry
@@ -5502,6 +5774,9 @@ document.addEventListener('keydown', (event) => {
     }
 
     async function wrapup() {
+        const branch = getActiveBranch();
+        if (!branch) return;
+
         setLoading(true);
         $actionArea.classList.add('hidden');
 
@@ -5511,7 +5786,7 @@ document.addEventListener('keydown', (event) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     scenario: treeState.scenario,
-                    conversation_history: treeState.history,
+                    conversation_history: branch.history,
                     provider_id: $provider.value || null,
                     temperature: parseFloat($tempSlider.value),
                 }),
@@ -5523,16 +5798,21 @@ document.addEventListener('keydown', (event) => {
             const data = await res.json();
 
             const wrapupTexts = data.node || [];
-            treeState.allNodes.push(...wrapupTexts);
-            treeState.history.push({
+            branch.allNodes.push(...wrapupTexts);
+            branch.history.push({
                 role: 'node',
                 content: wrapupTexts.map(t => `/${t.type} ${t.content}`).join(' | '),
             });
 
             addWrapupEntry(wrapupTexts);
-            treeState.phase = 'finished';
+            branch.phase = 'finished';
+            branch.currentPaths = [];
             $wrapupBtn.disabled = true;
             showToast('对话已收尾 ✅', 'success');
+
+            // Save + update branch UI
+            saveTimelineSnapshot();
+            updateBranchUI();
         } catch (err) {
             showToast(err.message, 'error');
             $actionArea.classList.remove('hidden');
@@ -5542,24 +5822,25 @@ document.addEventListener('keydown', (event) => {
     }
 
     function importToSendList() {
-        if (treeState.allNodes.length === 0) {
+        const branch = getActiveBranch();
+        if (!branch || branch.allNodes.length === 0) {
             showToast('暂无可导入的节点', 'warning');
             return;
         }
-        const newTexts = treeState.allNodes.map(t => ({
+        const newTexts = branch.allNodes.map(t => ({
             type: t.type,
             content: t.content,
         }));
         state.texts.push(...newTexts);
         renderTexts();
-        showToast(`已导入 ${newTexts.length} 条文本到发送列表`, 'success');
+        showToast(`已导入 ${newTexts.length} 条文本到发送列表（${branch.name}）`, 'success');
     }
 
     // ── Event listeners ─────────────────────────────────────────────
 
     $startBtn.addEventListener('click', initTree);
     $resetBtn.addEventListener('click', () => {
-        if (treeState.phase !== 'idle' && !confirm('确定重新开始？当前策划进度将清空。')) return;
+        if (treeState.globalPhase !== 'idle' && !confirm('确定重新开始？当前所有分支和策划进度将清空。')) return;
         reset();
     });
     $wrapupBtn.addEventListener('click', wrapup);
@@ -5583,4 +5864,12 @@ document.addEventListener('keydown', (event) => {
         $replyText.value = '';
         selectPath(text);
     });
+
+    // Branch events
+    $branchSelect.addEventListener('change', () => {
+        const targetId = parseInt($branchSelect.value, 10);
+        switchBranch(targetId);
+    });
+    $deleteBranchBtn.addEventListener('click', deleteBranch);
 })();
+

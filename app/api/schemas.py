@@ -137,6 +137,11 @@ class AIRewriteResponse(BaseModel):
 
 class ConvTreeInitRequest(BaseModel):
     scenario: str = Field(..., min_length=1, description="场景描述")
+    plot_style: str | None = Field(
+        None,
+        max_length=120,
+        description="剧情风格，控制AI生成文本的笔触和氛围，如'冷峻电影感'、'黑色幽默'",
+    )
     provider_id: str | None = Field(None, description="AI服务商ID")
     temperature: float | None = Field(
         None, ge=0.0, le=2.0, description="生成温度"
@@ -149,6 +154,16 @@ class ConvTreeNextRequest(BaseModel):
         ..., description="对话历史 [{role: 'node'|'path', content: '...'}]"
     )
     chosen_reply: str = Field(..., min_length=1, description="对方的实际回复")
+    plot_tendency: str | None = Field(
+        None,
+        max_length=200,
+        description="剧情倾向，引导AI朝用户期望的方向发展剧情",
+    )
+    plot_style: str | None = Field(
+        None,
+        max_length=120,
+        description="剧情风格，控制AI生成文本的笔触和氛围，如'冷峻电影感'、'黑色幽默'",
+    )
     provider_id: str | None = Field(None, description="AI服务商ID")
     temperature: float | None = Field(
         None, ge=0.0, le=2.0, description="生成温度"

@@ -299,6 +299,7 @@ async def conv_tree_init(body: ConvTreeInitRequest):
             scenario=body.scenario,
             provider_id=body.provider_id,
             temperature=body.temperature,
+            plot_style=body.plot_style,
         )
         return ConvTreeResponse(
             node=[TextLine(**item) for item in tree_data["node"]],
@@ -327,6 +328,8 @@ async def conv_tree_next(body: ConvTreeNextRequest):
             chosen_reply=body.chosen_reply,
             provider_id=body.provider_id,
             temperature=body.temperature,
+            plot_tendency=body.plot_tendency,
+            plot_style=body.plot_style,
         )
         return ConvTreeResponse(
             node=[TextLine(**item) for item in tree_data["node"]],

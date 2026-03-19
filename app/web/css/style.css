@@ -4508,6 +4508,45 @@ details[open] .send-history-toggle::before {
     gap: 8px;
 }
 
+.conv-tree-plot-tendency-row {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(167, 139, 250, 0.06);
+    border: 1px solid rgba(167, 139, 250, 0.18);
+    transition: border-color 0.25s ease;
+}
+
+.conv-tree-plot-tendency-row:focus-within {
+    border-color: rgba(167, 139, 250, 0.45);
+}
+
+.conv-tree-plot-tendency-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.conv-tree-plot-tendency-row textarea {
+    width: 100%;
+    background: rgba(8, 14, 28, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 8px;
+    color: var(--text-main);
+    padding: 8px 12px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.conv-tree-plot-tendency-row textarea:focus {
+    border-color: rgba(167, 139, 250, 0.5);
+    outline: none;
+}
+
 .conv-tree-paths-list {
     display: flex;
     flex-direction: column;
@@ -4589,6 +4628,96 @@ details[open] .send-history-toggle::before {
 
 .conv-tree-loading .loading-spinner {
     margin: 0;
+}
+
+/* Branch switcher */
+.conv-tree-branch-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border-radius: 10px;
+    background: rgba(167, 139, 250, 0.08);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    transition: border-color 0.25s ease;
+}
+
+.conv-tree-branch-switcher:hover {
+    border-color: rgba(167, 139, 250, 0.4);
+}
+
+.conv-tree-branch-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.conv-tree-branch-switcher select {
+    font-size: 0.82rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(8, 14, 28, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    color: var(--text-main);
+    cursor: pointer;
+    min-width: 80px;
+}
+
+/* Branch button on timeline entries */
+.conv-tree-branch-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    border-radius: 7px;
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s, background 0.2s, border-color 0.2s, transform 0.15s;
+    padding: 0;
+    line-height: 1;
+    z-index: 2;
+}
+
+.conv-tree-entry-card:hover .conv-tree-branch-btn {
+    opacity: 1;
+}
+
+.conv-tree-branch-btn:hover {
+    opacity: 1;
+    background: rgba(167, 139, 250, 0.25);
+    border-color: rgba(167, 139, 250, 0.5);
+    transform: scale(1.1);
+}
+
+.conv-tree-branch-btn:active {
+    transform: scale(0.95);
+}
+
+/* Branch fork origin indicator */
+.conv-tree-fork-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: rgba(167, 139, 250, 0.12);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    color: rgba(167, 139, 250, 0.9);
+    margin-left: auto;
 }
 
 @keyframes fadeSlideUp {
