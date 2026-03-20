@@ -11,6 +11,7 @@ from __future__ import annotations
 import ctypes
 import json
 import queue
+import re
 import threading
 import time
 from typing import Any
@@ -1063,10 +1064,20 @@ class QuickOverlayModule:
         self._enqueue_status(text, final)
 
     def _status_visual_state(self, text: str, final: bool) -> tuple[str, str, str, str]:
+
         lowered = text.lower()
-        is_error = any(key in text for key in ("失败", "异常", "取消")) or (
-            "error" in lowered
-        )
+
+        # Check for completion summary pattern like "成功 X 条，失败 Y 条".
+        # In this pattern "失败" is just a stat label — only an error if Y > 0.
+        fail_count_match = re.search(r"失败\s*(\d+)\s*条", text)
+        if fail_count_match is not None:
+            actual_failures = int(fail_count_match.group(1))
+            is_error = actual_failures > 0
+        else:
+            is_error = any(key in text for key in ("失败", "异常", "取消")) or (
+                "error" in lowered
+            )
+
         is_success = final and ("完成" in text or ("成功" in text and not is_error))
 
         if is_error:
