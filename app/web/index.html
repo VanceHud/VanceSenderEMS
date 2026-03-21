@@ -714,43 +714,81 @@
                 </header>
 
                 <div class="ai-advanced-container">
-                    <!-- Setup Card -->
-                    <div id="conv-tree-setup" class="mac-card glass-card" style="--anim-delay: 0.1s">
-                        <h3 class="bento-sub-title">
-                            <span class="icon">🎯</span> 场景设定
-                        </h3>
-                        <div class="form-group">
-                            <label>场景描述</label>
-                            <textarea id="conv-tree-scenario" placeholder="描述你的开场场景，例如：'一名便衣警察在暗巷中跟踪嫌疑人，准备上前盘问'..."
-                                rows="4" style="resize: none;"></textarea>
+                    <!-- Setup: Bento 2-card layout -->
+                    <div class="conv-tree-setup-layout">
+                        <!-- Scene Card -->
+                        <div id="conv-tree-setup" class="mac-card glass-card conv-tree-scene-card" style="--anim-delay: 0.1s">
+                            <h3 class="bento-sub-title">
+                                <div class="card-icon-wrapper" style="display:inline-flex;">
+                                    <div class="icon-glow glow-cyan"></div>
+                                    <svg class="card-title-icon" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" style="color:var(--accent-cyan);">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <path d="M12 16v-4"></path>
+                                        <path d="M12 8h.01"></path>
+                                    </svg>
+                                </div>
+                                场景设定
+                            </h3>
+                            <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
+                                <label>场景描述</label>
+                                <textarea id="conv-tree-scenario" placeholder="描述你的开场场景，例如：'一名便衣警察在暗巷中跟踪嫌疑人，准备上前盘问'..."
+                                    rows="5" style="flex: 1; resize: none;"></textarea>
+                            </div>
+                            <div class="form-group" style="margin-top: 12px;">
+                                <label>剧情风格 <span class="hint" style="font-weight:400;font-size:0.8rem;color:var(--text-muted)">（可选，全程生效）</span></label>
+                                <input id="conv-tree-plot-style" type="text"
+                                    placeholder="例如：冷峻电影感、黑色幽默、温馨日系日常、紧张悬疑">
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>剧情风格 <span class="hint" style="font-weight:400;font-size:0.8rem;color:var(--text-muted)">（可选，全程生效）</span></label>
-                            <input id="conv-tree-plot-style" type="text"
-                                placeholder="例如：冷峻电影感、黑色幽默、温馨日系日常、紧张悬疑">
-                        </div>
-                        <div class="form-row" style="gap: 12px; align-items: flex-end;">
-                            <div class="form-group" style="flex:1;">
+
+                        <!-- Settings Card -->
+                        <div class="mac-card glass-card conv-tree-settings-card" style="--anim-delay: 0.2s">
+                            <h3 class="bento-sub-title">
+                                <div class="card-icon-wrapper" style="display:inline-flex;">
+                                    <div class="icon-glow glow-orange"></div>
+                                    <svg class="card-title-icon" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" style="color:#fb923c;">
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                    </svg>
+                                </div>
+                                策划设置
+                            </h3>
+                            <div class="form-group">
                                 <label>AI 服务商</label>
                                 <select id="conv-tree-provider"></select>
                             </div>
-                            <div class="form-group" style="flex:0.6;">
+                            <div class="form-group">
                                 <label>创意温度 <span id="conv-tree-temp-label" style="font-weight:400;font-size:0.82rem;color:var(--accent-cyan)">0.8</span></label>
                                 <input type="range" id="conv-tree-temperature" min="0" max="2" step="0.1" value="0.8"
                                     style="width:100%; accent-color: var(--accent-cyan);">
+                                <div
+                                    style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--text-muted); margin-top:2px;">
+                                    <span>精确</span><span>创意</span>
+                                </div>
                             </div>
-                            <button id="conv-tree-start-btn" class="btn mac-btn-primary glow-effect" type="button"
-                                style="padding: 12px 28px; white-space: nowrap;">
+                            <div style="flex: 1;"></div>
+                            <button id="conv-tree-start-btn" class="btn mac-btn-primary btn-block glow-effect" type="button"
+                                style="margin-top: 20px; padding: 14px; font-size: 1.05rem;">
                                 <span class="icon">🚀</span> 开始策划
                             </button>
                         </div>
                     </div>
 
                     <!-- Conversation Flow -->
-                    <div id="conv-tree-flow-area" class="mac-card glass-card hidden" style="--anim-delay: 0.2s">
+                    <div id="conv-tree-flow-area" class="mac-card glass-card hidden" style="--anim-delay: 0.3s">
                         <div class="conv-tree-flow-header">
                             <h3 class="bento-sub-title" style="margin-bottom:0;">
-                                <span class="icon">🌳</span> 对话流程
+                                <div class="card-icon-wrapper" style="display:inline-flex;">
+                                    <div class="icon-glow glow-green"></div>
+                                    <svg class="card-title-icon" viewBox="0 0 24 24" fill="none"
+                                        stroke="currentColor" stroke-width="2" style="color:var(--accent-success);">
+                                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                                    </svg>
+                                </div>
+                                对话流程
+                                <span id="conv-tree-round-badge" class="conv-tree-round-badge hidden">第 1 轮</span>
                             </h3>
                             <div class="conv-tree-flow-actions">
                                 <div class="conv-tree-branch-switcher hidden" id="conv-tree-branch-switcher">
@@ -765,13 +803,13 @@
                                     </button>
                                 </div>
                                 <button id="conv-tree-import-btn" class="btn btn-sm mac-btn-secondary" type="button" disabled>
-                                    导入到发送列表
+                                    📥 导入到发送列表
                                 </button>
                                 <button id="conv-tree-wrapup-btn" class="btn btn-sm btn-outline" type="button" disabled>
                                     🏁 收尾结束
                                 </button>
                                 <button id="conv-tree-reset-btn" class="btn btn-sm mac-btn-ghost" type="button">
-                                    重新开始
+                                    🔄 重新开始
                                 </button>
                             </div>
                         </div>
@@ -783,7 +821,7 @@
                         <!-- Path Selection / Manual Input -->
                         <div id="conv-tree-action-area" class="conv-tree-action-area hidden">
                             <div class="conv-tree-action-label">
-                                <span class="icon">📨</span> 对方的回复是？
+                                <span class="conv-tree-action-icon">📨</span> 对方的回复是？
                             </div>
                             <div class="conv-tree-plot-tendency-row">
                                 <label class="conv-tree-plot-tendency-label" for="conv-tree-plot-tendency">
@@ -817,10 +855,14 @@
                             </div>
                         </div>
 
-                        <!-- Loading indicator -->
+                        <!-- Loading indicator — skeleton style -->
                         <div id="conv-tree-loading" class="conv-tree-loading hidden">
-                            <div class="loading-spinner"></div>
-                            <span>AI 正在思考...</span>
+                            <div class="conv-tree-skeleton-group">
+                                <div class="conv-tree-skeleton-bar wide"></div>
+                                <div class="conv-tree-skeleton-bar medium"></div>
+                                <div class="conv-tree-skeleton-bar narrow"></div>
+                            </div>
+                            <span class="conv-tree-loading-text">AI 正在思考...</span>
                         </div>
                     </div>
                 </div>

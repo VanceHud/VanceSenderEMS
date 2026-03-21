@@ -5253,6 +5253,9 @@ document.addEventListener('keydown', (event) => {
     const $plotTendency= document.getElementById('conv-tree-plot-tendency');
     const $plotStyle   = document.getElementById('conv-tree-plot-style');
 
+    // Round badge
+    const $roundBadge  = document.getElementById('conv-tree-round-badge');
+
     // Branch UI elements
     const $branchSwitcher = document.getElementById('conv-tree-branch-switcher');
     const $branchSelect   = document.getElementById('conv-tree-branch-select');
@@ -5444,6 +5447,7 @@ document.addEventListener('keydown', (event) => {
         restoreTimeline(targetBranch);
         updateBranchUI();
         updateActionAreaForBranch();
+        updateRoundBadge();
         $manualInput.classList.add('hidden');
         $replyText.value = '';
         if ($plotTendency) $plotTendency.value = '';
@@ -5485,6 +5489,18 @@ document.addEventListener('keydown', (event) => {
         }
     }
 
+    function updateRoundBadge() {
+        const branch = getActiveBranch();
+        if (!branch || !$roundBadge) return;
+        const nodeCount = branch.history.filter(h => h.role === 'node').length;
+        if (nodeCount > 0) {
+            $roundBadge.textContent = `第 ${nodeCount} 轮`;
+            $roundBadge.classList.remove('hidden');
+        } else {
+            $roundBadge.classList.add('hidden');
+        }
+    }
+
     function reset() {
         treeState.scenario = '';
         treeState.branches = [];
@@ -5509,6 +5525,7 @@ document.addEventListener('keydown', (event) => {
             $plotStyle.value = '';
             $plotStyle.disabled = false;
         }
+        if ($roundBadge) $roundBadge.classList.add('hidden');
         $branchSwitcher.classList.add('hidden');
         $branchSelect.innerHTML = '<option value="0">主线</option>';
     }
@@ -5587,7 +5604,7 @@ document.addEventListener('keydown', (event) => {
             });
         }
 
-        entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        entry.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function addPathEntry(content) {
@@ -5605,7 +5622,7 @@ document.addEventListener('keydown', (event) => {
                 </div>
             </div>`;
         $timeline.appendChild(entry);
-        entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        entry.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function addWrapupEntry(texts) {
@@ -5621,18 +5638,20 @@ document.addEventListener('keydown', (event) => {
             </div>`;
         $timeline.appendChild(entry);
         bindCopyButtons(entry, texts);
-        entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        entry.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function renderPaths(paths) {
         $pathsList.innerHTML = '';
-        paths.forEach(p => {
+        paths.forEach((p, idx) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'conv-tree-path-btn';
             btn.innerHTML = `
+                <span class="conv-tree-path-number">${idx + 1}</span>
                 <span class="conv-tree-path-label">${escapeHtml(p.label)}</span>
-                <span class="conv-tree-path-content">${escapeHtml(p.content)}</span>`;
+                <span class="conv-tree-path-content">${escapeHtml(p.content)}</span>
+                <span class="conv-tree-path-arrow">→</span>`;
             btn.addEventListener('click', () => selectPath(p.content));
             $pathsList.appendChild(btn);
         });
@@ -5701,6 +5720,7 @@ document.addEventListener('keydown', (event) => {
             const paths = data.paths || [];
             addNodeEntry(nodeTexts, paths);
             renderPaths(paths);
+            updateRoundBadge();
             $wrapupBtn.disabled = false;
             $importBtn.disabled = false;
 
@@ -5761,6 +5781,7 @@ document.addEventListener('keydown', (event) => {
             const paths = data.paths || [];
             addNodeEntry(nodeTexts, paths);
             renderPaths(paths);
+            updateRoundBadge();
 
             // Save snapshot after update
             saveTimelineSnapshot();
@@ -5808,6 +5829,7 @@ document.addEventListener('keydown', (event) => {
             branch.phase = 'finished';
             branch.currentPaths = [];
             $wrapupBtn.disabled = true;
+            updateRoundBadge();
             showToast('对话已收尾 ✅', 'success');
 
             // Save + update branch UI

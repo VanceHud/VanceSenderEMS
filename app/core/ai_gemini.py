@@ -155,7 +155,7 @@ async def gemini_generate_stream(
     if system_instruction:
         config.system_instruction = system_instruction
 
-    async for chunk in client.aio.models.generate_content_stream(
+    async for chunk in await client.aio.models.generate_content_stream(
         model=model,
         contents=contents,
         config=config,

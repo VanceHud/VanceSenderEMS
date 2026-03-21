@@ -4281,6 +4281,30 @@ details[open] .send-history-toggle::before {
     gap: 20px;
 }
 
+/* Setup: Bento 2-card layout */
+.conv-tree-setup-layout {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 900px) {
+    .conv-tree-setup-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.conv-tree-scene-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.conv-tree-settings-card {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Flow header */
 .conv-tree-flow-header {
     display: flex;
     align-items: center;
@@ -4296,12 +4320,41 @@ details[open] .send-history-toggle::before {
     flex-wrap: wrap;
 }
 
+/* Round count badge */
+.conv-tree-round-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 99px;
+    background: linear-gradient(135deg, rgba(79, 209, 255, 0.2), rgba(52, 211, 153, 0.15));
+    border: 1px solid rgba(79, 209, 255, 0.3);
+    color: var(--accent-cyan);
+    margin-left: 10px;
+    letter-spacing: 0.5px;
+    animation: fadeSlideUp 0.3s ease;
+}
+
 /* Timeline */
 .conv-tree-timeline {
     position: relative;
     padding: 8px 0 8px 32px;
     max-height: 60dvh;
     overflow-y: auto;
+}
+
+.conv-tree-timeline::-webkit-scrollbar {
+    width: 4px;
+}
+
+.conv-tree-timeline::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.conv-tree-timeline::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.2);
+    border-radius: 4px;
 }
 
 .conv-tree-timeline::before {
@@ -4313,14 +4366,26 @@ details[open] .send-history-toggle::before {
     width: 2px;
     background: linear-gradient(180deg, var(--accent-cyan), rgba(79, 209, 255, 0.2));
     border-radius: 2px;
+    animation: timelinePulse 3s ease-in-out infinite;
+}
+
+@keyframes timelinePulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
 }
 
 /* Timeline entry (common) */
 .conv-tree-entry {
     position: relative;
     margin-bottom: 16px;
-    animation: fadeSlideUp 0.35s ease;
+    animation: fadeSlideUp 0.4s ease backwards;
 }
+
+.conv-tree-entry:nth-child(1) { animation-delay: 0s; }
+.conv-tree-entry:nth-child(2) { animation-delay: 0.06s; }
+.conv-tree-entry:nth-child(3) { animation-delay: 0.12s; }
+.conv-tree-entry:nth-child(4) { animation-delay: 0.18s; }
+.conv-tree-entry:nth-child(5) { animation-delay: 0.24s; }
 
 .conv-tree-entry::before {
     content: '';
@@ -4332,6 +4397,11 @@ details[open] .send-history-toggle::before {
     border-radius: 50%;
     border: 2px solid;
     z-index: 1;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.conv-tree-entry:hover::before {
+    transform: scale(1.3);
 }
 
 /* Node entry (ours) */
@@ -4341,21 +4411,31 @@ details[open] .send-history-toggle::before {
     box-shadow: 0 0 8px rgba(79, 209, 255, 0.4);
 }
 
+.conv-tree-entry.entry-node:hover::before {
+    box-shadow: 0 0 14px rgba(79, 209, 255, 0.6);
+}
+
 .conv-tree-entry-card {
     padding: 14px 18px;
     border-radius: 14px;
     border: 1px solid;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.25s ease;
 }
 
 .conv-tree-entry-card:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
 }
 
 .conv-tree-entry.entry-node .conv-tree-entry-card {
     border-color: rgba(79, 209, 255, 0.25);
     background: linear-gradient(135deg, rgba(79, 209, 255, 0.08), rgba(15, 23, 42, 0.6));
     box-shadow: 0 4px 16px rgba(79, 209, 255, 0.1);
+    border-left: 3px solid rgba(79, 209, 255, 0.5);
+}
+
+.conv-tree-entry.entry-node .conv-tree-entry-card:hover {
+    box-shadow: 0 8px 28px rgba(79, 209, 255, 0.15);
+    border-color: rgba(79, 209, 255, 0.4);
 }
 
 .conv-tree-entry-label {
@@ -4462,10 +4542,20 @@ details[open] .send-history-toggle::before {
     box-shadow: 0 0 8px rgba(251, 146, 60, 0.4);
 }
 
+.conv-tree-entry.entry-path:hover::before {
+    box-shadow: 0 0 14px rgba(251, 146, 60, 0.6);
+}
+
 .conv-tree-entry.entry-path .conv-tree-entry-card {
     border-color: rgba(251, 146, 60, 0.25);
     background: linear-gradient(135deg, rgba(251, 146, 60, 0.08), rgba(15, 23, 42, 0.6));
     box-shadow: 0 4px 16px rgba(251, 146, 60, 0.1);
+    border-left: 3px solid rgba(251, 146, 60, 0.5);
+}
+
+.conv-tree-entry.entry-path .conv-tree-entry-card:hover {
+    box-shadow: 0 8px 28px rgba(251, 146, 60, 0.15);
+    border-color: rgba(251, 146, 60, 0.4);
 }
 
 .conv-tree-entry.entry-path .conv-tree-entry-label {
@@ -4479,10 +4569,20 @@ details[open] .send-history-toggle::before {
     box-shadow: 0 0 8px rgba(52, 211, 153, 0.4);
 }
 
+.conv-tree-entry.entry-wrapup:hover::before {
+    box-shadow: 0 0 14px rgba(52, 211, 153, 0.6);
+}
+
 .conv-tree-entry.entry-wrapup .conv-tree-entry-card {
     border-color: rgba(52, 211, 153, 0.3);
     background: linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(15, 23, 42, 0.6));
     box-shadow: 0 4px 16px rgba(52, 211, 153, 0.1);
+    border-left: 3px solid rgba(52, 211, 153, 0.5);
+}
+
+.conv-tree-entry.entry-wrapup .conv-tree-entry-card:hover {
+    box-shadow: 0 8px 28px rgba(52, 211, 153, 0.15);
+    border-color: rgba(52, 211, 153, 0.4);
 }
 
 .conv-tree-entry.entry-wrapup .conv-tree-entry-label {
@@ -4492,10 +4592,12 @@ details[open] .send-history-toggle::before {
 /* Action area */
 .conv-tree-action-area {
     margin-top: 16px;
-    padding: 18px;
-    border-radius: 14px;
-    border: 1px dashed rgba(148, 163, 184, 0.3);
-    background: rgba(15, 23, 42, 0.4);
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.3));
+    backdrop-filter: blur(8px);
+    animation: fadeSlideUp 0.3s ease;
 }
 
 .conv-tree-action-label {
@@ -4508,17 +4610,29 @@ details[open] .send-history-toggle::before {
     gap: 8px;
 }
 
+.conv-tree-action-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(251, 146, 60, 0.12);
+    font-size: 0.9rem;
+}
+
 .conv-tree-plot-tendency-row {
     margin-bottom: 14px;
     padding: 12px 14px;
     border-radius: 12px;
     background: rgba(167, 139, 250, 0.06);
     border: 1px solid rgba(167, 139, 250, 0.18);
-    transition: border-color 0.25s ease;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .conv-tree-plot-tendency-row:focus-within {
     border-color: rgba(167, 139, 250, 0.45);
+    box-shadow: 0 0 16px rgba(167, 139, 250, 0.1);
 }
 
 .conv-tree-plot-tendency-label {
@@ -4569,7 +4683,13 @@ details[open] .send-history-toggle::before {
     font-size: 0.88rem;
     line-height: 1.5;
     width: 100%;
+    animation: fadeSlideUp 0.35s ease backwards;
+    position: relative;
 }
+
+.conv-tree-path-btn:nth-child(1) { animation-delay: 0s; }
+.conv-tree-path-btn:nth-child(2) { animation-delay: 0.06s; }
+.conv-tree-path-btn:nth-child(3) { animation-delay: 0.12s; }
 
 .conv-tree-path-btn:hover {
     border-color: rgba(251, 146, 60, 0.5);
@@ -4580,6 +4700,23 @@ details[open] .send-history-toggle::before {
 
 .conv-tree-path-btn:active {
     transform: translateX(2px) scale(0.99);
+}
+
+/* Path button number badge */
+.conv-tree-path-number {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(251, 146, 60, 0.2);
+    border: 1px solid rgba(251, 146, 60, 0.4);
+    color: #fb923c;
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
 }
 
 .conv-tree-path-label {
@@ -4596,6 +4733,20 @@ details[open] .send-history-toggle::before {
 .conv-tree-path-content {
     flex: 1;
     color: var(--text-secondary);
+}
+
+/* Path arrow indicator */
+.conv-tree-path-arrow {
+    flex-shrink: 0;
+    color: rgba(251, 146, 60, 0.4);
+    font-size: 0.9rem;
+    transition: color 0.25s, transform 0.25s;
+    margin-top: 1px;
+}
+
+.conv-tree-path-btn:hover .conv-tree-path-arrow {
+    color: #fb923c;
+    transform: translateX(3px);
 }
 
 /* Manual input */
@@ -4615,19 +4766,56 @@ details[open] .send-history-toggle::before {
     justify-content: flex-end;
 }
 
-/* Loading */
+/* Loading — skeleton style */
 .conv-tree-loading {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    padding: 24px;
+    gap: 16px;
+    padding: 32px 24px;
     color: var(--text-muted);
     font-size: 0.9rem;
+    animation: fadeSlideUp 0.3s ease;
 }
 
-.conv-tree-loading .loading-spinner {
-    margin: 0;
+.conv-tree-skeleton-group {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.conv-tree-skeleton-bar {
+    height: 14px;
+    border-radius: 7px;
+    background: linear-gradient(90deg,
+        rgba(148, 163, 184, 0.08) 25%,
+        rgba(148, 163, 184, 0.16) 50%,
+        rgba(148, 163, 184, 0.08) 75%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.8s ease-in-out infinite;
+}
+
+.conv-tree-skeleton-bar.wide { width: 90%; }
+.conv-tree-skeleton-bar.medium { width: 65%; }
+.conv-tree-skeleton-bar.narrow { width: 45%; }
+
+@keyframes skeletonShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.conv-tree-loading-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    animation: loadingTextPulse 2s ease-in-out infinite;
+}
+
+@keyframes loadingTextPulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
 }
 
 /* Branch switcher */
@@ -4730,6 +4918,7 @@ details[open] .send-history-toggle::before {
         transform: translateY(0);
     }
 }
+
 
 /* --- Apple macOS UI Overrides --- */
 .mac-window {
