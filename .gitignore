@@ -34,6 +34,14 @@ dist/
 # Sensitive/local runtime data
 config.yaml
 data/presets/*.json
+!data/presets/medical_comfort.json
+!data/presets/medical_cpr.json
+!data/presets/medical_death_declaration.json
+!data/presets/medical_er_handoff.json
+!data/presets/medical_initial_check.json
+!data/presets/medical_iv_line.json
+!data/presets/medical_transport.json
+!data/presets/medical_wound_dressing.json
 
 # Windows oddities
 nul
