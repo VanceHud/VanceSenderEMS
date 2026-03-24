@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>VanceSender - RP文本发送器</title>
+    <title>VanceSender EMS - 医疗RP文本发送器</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -25,8 +25,8 @@
                     </svg>
                 </div>
                 <div class="desktop-titlebar-meta">
-                    <span class="desktop-titlebar-name">VanceSender</span>
-                    <span class="desktop-titlebar-sub">重新定义RP文本发送体验</span>
+                    <span class="desktop-titlebar-name">VanceSender EMS</span>
+                    <span class="desktop-titlebar-sub">医疗扮演特化版</span>
                 </div>
             </div>
         </div>
@@ -74,7 +74,7 @@
                         <polygon points="116,140 128,180 110,160" fill="currentColor" />
                     </svg>
                 </div>
-                <span class="logo-text">VanceSender</span>
+                <span class="logo-text">VanceSender <span class="medical-badge">🏥 EMS</span></span>
             </div>
 
             <ul class="nav-links">
@@ -143,6 +143,19 @@
                     </span>
                     <span class="label" data-i18n="nav.presets">预设</span>
                 </li>
+                <li class="nav-item" data-target="panel-glossary">
+                    <span class="icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <title>医疗助手</title>
+                            <path d="M12 2L12 8"></path>
+                            <path d="M12 16L12 22"></path>
+                            <path d="M2 12L8 12"></path>
+                            <path d="M16 12L22 12"></path>
+                            <circle cx="12" cy="12" r="4"></circle>
+                        </svg>
+                    </span>
+                    <span class="label">医疗助手</span>
+                </li>
                 <li class="nav-item" data-target="panel-settings">
                     <span class="icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -194,8 +207,8 @@
                         <div class="hero-blur-blob blob-2"></div>
                         <div class="hero-content">
                             <div class="hero-header-wrap">
-                                <h2 class="hero-title">欢迎使用 VanceSender</h2>
-                                <p class="hero-subtitle">重新定义 RP 文本发送体验，高效、轻量、现代化。</p>
+                                <h2 class="hero-title">欢迎使用 VanceSender EMS</h2>
+                                <p class="hero-subtitle">医疗扮演特化版 — 专业、高效的 EMS/医疗 RP 文本生成与发送。</p>
                             </div>
 
                             <div class="hero-quick-info">
@@ -577,6 +590,64 @@
                             <p>暂无可发送内容</p>
                         </div>
                     </div>
+
+                    <!-- Medical Quick Actions -->
+                    <details class="med-quick-actions" open>
+                        <summary class="med-quick-actions-header">
+                            <span>🏥 医疗快捷操作</span>
+                            <span class="med-quick-hint">一键发送到游戏</span>
+                        </summary>
+
+                        <!-- Quick Action Buttons -->
+                        <div class="med-quick-category-label">📋 快速评估</div>
+                        <div class="med-quick-btn-grid">
+                            <button class="med-quick-btn" data-med-action="check_pulse">🩺 检查脉搏</button>
+                            <button class="med-quick-btn" data-med-action="check_pupil">👁️ 查看瞳孔</button>
+                            <button class="med-quick-btn" data-med-action="check_breathing">🫁 听诊呼吸</button>
+                            <button class="med-quick-btn" data-med-action="check_consciousness">🔦 检查意识</button>
+                            <button class="med-quick-btn" data-med-action="attach_monitor">📊 连接监护仪</button>
+                            <button class="med-quick-btn" data-med-action="check_bp">💉 测量血压</button>
+                        </div>
+
+                        <div class="med-quick-category-label">🩹 快速处置</div>
+                        <div class="med-quick-btn-grid">
+                            <button class="med-quick-btn" data-med-action="pressure_stop_bleeding">🩹 按压止血</button>
+                            <button class="med-quick-btn" data-med-action="apply_tourniquet">🔧 止血带</button>
+                            <button class="med-quick-btn" data-med-action="open_airway">💨 开放气道</button>
+                            <button class="med-quick-btn" data-med-action="establish_iv">💉 建立IV通路</button>
+                            <button class="med-quick-btn" data-med-action="apply_splint">🦴 夹板固定</button>
+                            <button class="med-quick-btn" data-med-action="apply_cervical_collar">🔒 颈托固定</button>
+                        </div>
+
+                        <div class="med-quick-category-label">📻 快速沟通</div>
+                        <div class="med-quick-btn-grid">
+                            <button class="med-quick-btn" data-med-action="comfort_patient">🤝 安抚患者</button>
+                            <button class="med-quick-btn" data-med-action="radio_dispatch">📻 呼叫指挥</button>
+                            <button class="med-quick-btn" data-med-action="radio_backup">🚨 请求增援</button>
+                            <button class="med-quick-btn" data-med-action="record_vitals">📋 记录体征</button>
+                        </div>
+
+                        <div class="med-quick-category-label">⚡ 设备操作</div>
+                        <div class="med-quick-btn-grid">
+                            <button class="med-quick-btn" data-med-action="prepare_stretcher">🛏️ 准备担架</button>
+                            <button class="med-quick-btn" data-med-action="power_on_aed">⚡ 启动AED</button>
+                            <button class="med-quick-btn" data-med-action="bag_mask_ventilation">🎛️ 球囊通气</button>
+                            <button class="med-quick-btn" data-med-action="use_suction">🔧 吸引器</button>
+                        </div>
+
+                        <!-- Mini Vitals Generator -->
+                        <div class="med-quick-category-label">🎲 快速生成体征</div>
+                        <div class="med-quick-vitals-row">
+                            <select id="med-quick-severity" class="select-sm pill-select">
+                                <option value="mild">🟢 轻伤</option>
+                                <option value="moderate" selected>🟡 中等</option>
+                                <option value="severe">🟠 重伤</option>
+                                <option value="critical">🔴 危重</option>
+                            </select>
+                            <button id="med-quick-vitals-btn" class="med-quick-btn med-quick-vitals-send" type="button">🎲 生成并发送体征</button>
+                        </div>
+                        <div id="med-quick-vitals-preview" class="med-quick-vitals-preview"></div>
+                    </details>
                 </div>
             </section>
 
@@ -601,9 +672,16 @@
                                 </div>
                             </div>
 
+                            <div class="medical-template-selector">
+                                <label>🏥 医疗场景模板 <span class="hint" style="font-weight:400;font-size:0.8rem;color:var(--text-muted)">一键填充场景</span></label>
+                                <select id="ai-medical-template" class="medical-template-select">
+                                    <option value="">选择医疗场景模板...</option>
+                                </select>
+                            </div>
+
                             <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
                                 <label>场景描述</label>
-                                <textarea id="ai-scenario" placeholder="描述你想要生成的角色扮演场景，例如：'一个愤怒的黑帮老大正在审问叛徒'..." rows="5"
+                                <textarea id="ai-scenario" placeholder="描述你想要生成的医疗场景，例如：'急救人员到达一起严重车祸现场，需要对伤者进行初步评估和急救'..." rows="5"
                                     style="flex: 1; resize: none;"></textarea>
                             </div>
 
@@ -732,7 +810,12 @@
                             </h3>
                             <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
                                 <label>场景描述</label>
-                                <textarea id="conv-tree-scenario" placeholder="描述你的开场场景，例如：'一名便衣警察在暗巷中跟踪嫌疑人，准备上前盘问'..."
+                                <div class="medical-template-selector" style="margin-bottom:8px;">
+                                    <select id="conv-tree-medical-template" class="medical-template-select">
+                                        <option value="">🏥 选择医疗场景模板...</option>
+                                    </select>
+                                </div>
+                                <textarea id="conv-tree-scenario" placeholder="描述你的开场医疗场景，例如：'你作为急救人员到达一起严重车祸现场...'"
                                     rows="5" style="flex: 1; resize: none;"></textarea>
                             </div>
                             <div class="form-group" style="margin-top: 12px;">
@@ -899,6 +982,83 @@
                     <div id="presets-grid" class="presets-grid">
                         <!-- Presets injected here -->
                         <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Panel: Medical Assistant (Tabbed) -->
+            <section id="panel-glossary" class="panel">
+                <header class="panel-header">
+                    <h1>🏥 医疗助手</h1>
+                    <div class="header-actions">
+                        <span class="medical-badge">EMS 工具箱</span>
+                    </div>
+                </header>
+
+                <!-- Tab Bar -->
+                <div class="med-tab-bar">
+                    <button class="med-tab active" data-tab="tab-quick-phrases">🚀 快捷短语</button>
+                    <button class="med-tab" data-tab="tab-vitals-gen">🎲 体征生成</button>
+                    <button class="med-tab" data-tab="tab-sbar">📝 SBAR报告</button>
+                    <button class="med-tab" data-tab="tab-combos">🔗 连招</button>
+                    <button class="med-tab" data-tab="tab-glossary">📖 术语速查</button>
+                </div>
+
+                <!-- Tab: Quick Phrases -->
+                <div id="tab-quick-phrases" class="med-tab-content active">
+                    <div id="quick-phrases-grid" class="quick-phrases-grid">
+                        <div class="empty-state small"><p>正在加载快捷短语...</p></div>
+                    </div>
+                </div>
+
+                <!-- Tab: Vitals Generator -->
+                <div id="tab-vitals-gen" class="med-tab-content">
+                    <div class="vitals-gen-controls">
+                        <div class="form-group" style="margin-bottom:12px;">
+                            <label>伤情程度</label>
+                            <div class="segmented-control">
+                                <label class="segmented-item"><input type="radio" name="vitals-severity" value="mild"><div class="segmented-bg"></div><span>🟢 轻伤</span></label>
+                                <label class="segmented-item"><input type="radio" name="vitals-severity" value="moderate" checked><div class="segmented-bg"></div><span>🟡 中等</span></label>
+                                <label class="segmented-item"><input type="radio" name="vitals-severity" value="severe"><div class="segmented-bg"></div><span>🟠 重伤</span></label>
+                                <label class="segmented-item"><input type="radio" name="vitals-severity" value="critical"><div class="segmented-bg"></div><span>🔴 危重</span></label>
+                            </div>
+                        </div>
+                        <button id="vitals-gen-btn" class="btn mac-btn-primary glow-effect" type="button" style="width:100%;padding:12px;">🎲 随机生成体征</button>
+                    </div>
+                    <div id="vitals-gen-result" style="margin-top:14px;"></div>
+                    <div id="vitals-gen-texts" style="margin-top:10px;"></div>
+                </div>
+
+                <!-- Tab: SBAR Report -->
+                <div id="tab-sbar" class="med-tab-content">
+                    <div class="sbar-form">
+                        <div class="form-group"><label>S — 情况 (Situation)</label><input id="sbar-situation" type="text" placeholder="男性，约35岁，车祸胸部创伤"></div>
+                        <div class="form-group"><label>B — 背景 (Background)</label><input id="sbar-background" type="text" placeholder="高速公路正面碰撞，被困约15分钟"></div>
+                        <div class="form-group"><label>A — 评估 (Assessment)</label><input id="sbar-assessment" type="text" placeholder="HR 118bpm, BP 88/52, SpO2 91%, GCS 11"></div>
+                        <div class="form-group"><label>R — 建议 (Recommendation)</label><input id="sbar-recommendation" type="text" placeholder="已建立IV通路快速补液，建议优先CT检查"></div>
+                        <button id="sbar-gen-btn" class="btn mac-btn-primary glow-effect" type="button" style="width:100%;padding:12px;margin-top:12px;">📝 生成 SBAR 交接报告</button>
+                    </div>
+                    <div id="sbar-result" style="margin-top:14px;"></div>
+                </div>
+
+                <!-- Tab: Combos -->
+                <div id="tab-combos" class="med-tab-content">
+                    <div id="combos-grid" class="combos-grid">
+                        <div class="empty-state small"><p>正在加载连招...</p></div>
+                    </div>
+                </div>
+
+                <!-- Tab: Glossary -->
+                <div id="tab-glossary" class="med-tab-content">
+                    <div class="glossary-search-bar">
+                        <input type="text" id="glossary-search" class="glossary-search-input" placeholder="搜索术语（如 GCS、10-4、SpO2...）">
+                        <select id="glossary-category" class="glossary-category-filter">
+                            <option value="">全部分类</option>
+                        </select>
+                    </div>
+                    <div id="glossary-count" class="glossary-count"></div>
+                    <div id="glossary-grid" class="glossary-grid">
+                        <div class="empty-state small"><div class="empty-icon">🏥</div><p>正在加载医疗术语...</p></div>
                     </div>
                 </div>
             </section>
@@ -1399,6 +1559,7 @@
 
     <script src="/static/js/i18n.js"></script>
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/medical.js"></script>
 </body>
 
 </html>

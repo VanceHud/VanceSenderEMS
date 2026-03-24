@@ -305,6 +305,7 @@ async def conv_tree_init(body: ConvTreeInitRequest):
             node=[TextLine(**item) for item in tree_data["node"]],
             paths=[ConvTreePath(**p) for p in tree_data["paths"]],
             provider_id=resolved_pid,
+            vitals=tree_data.get("vitals"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -335,6 +336,7 @@ async def conv_tree_next(body: ConvTreeNextRequest):
             node=[TextLine(**item) for item in tree_data["node"]],
             paths=[ConvTreePath(**p) for p in tree_data["paths"]],
             provider_id=resolved_pid,
+            vitals=tree_data.get("vitals"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

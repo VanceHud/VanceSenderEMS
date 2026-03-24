@@ -5577,7 +5577,7 @@ document.addEventListener('keydown', (event) => {
         return $timeline.querySelectorAll('.conv-tree-entry').length;
     }
 
-    function addNodeEntry(texts, currentPaths, label = '📤 我方节点') {
+    function addNodeEntry(texts, currentPaths, label = '📤 我方节点', vitals = null) {
         const entryIndex = getEntryIndex();
         const entry = document.createElement('div');
         entry.className = 'conv-tree-entry entry-node';
@@ -5586,10 +5586,13 @@ document.addEventListener('keydown', (event) => {
         if (currentPaths && currentPaths.length > 0) {
             entry.setAttribute('data-paths-after', JSON.stringify(currentPaths));
         }
+        const vitalsHtml = (typeof window.renderVitalsPanel === 'function' && vitals)
+            ? window.renderVitalsPanel(vitals) : '';
         entry.innerHTML = `
             <div class="conv-tree-entry-card" style="position:relative;">
                 <div class="conv-tree-entry-label">${label}</div>
                 <div class="conv-tree-entry-texts">${renderTextLines(texts)}</div>
+                ${vitalsHtml}
                 <button class="conv-tree-branch-btn" type="button" title="从这里创建分支">🔀</button>
             </div>`;
         $timeline.appendChild(entry);
@@ -5718,7 +5721,7 @@ document.addEventListener('keydown', (event) => {
             });
 
             const paths = data.paths || [];
-            addNodeEntry(nodeTexts, paths);
+            addNodeEntry(nodeTexts, paths, '📤 我方节点', data.vitals || null);
             renderPaths(paths);
             updateRoundBadge();
             $wrapupBtn.disabled = false;
@@ -5779,7 +5782,7 @@ document.addEventListener('keydown', (event) => {
             });
 
             const paths = data.paths || [];
-            addNodeEntry(nodeTexts, paths);
+            addNodeEntry(nodeTexts, paths, '📤 我方节点', data.vitals || null);
             renderPaths(paths);
             updateRoundBadge();
 

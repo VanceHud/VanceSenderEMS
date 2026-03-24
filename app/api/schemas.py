@@ -191,6 +191,7 @@ class ConvTreeResponse(BaseModel):
     node: list[TextLine]
     paths: list[ConvTreePath]
     provider_id: str
+    vitals: dict[str, str] | None = Field(None, description="患者生命体征摘要")
 
 
 class ConvTreeWrapupResponse(BaseModel):
