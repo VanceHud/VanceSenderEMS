@@ -1478,6 +1478,10 @@ function initQuickPanelMode() {
     const quickPanel = document.getElementById('panel-quick-send');
     if (quickPanel) {
         quickPanel.classList.add('active');
+        const medQuickActions = quickPanel.querySelector('.med-quick-actions');
+        if (medQuickActions) {
+            medQuickActions.removeAttribute('open');
+        }
     }
 
     if (dom.quickPanelWindowClose) {
@@ -3470,11 +3474,13 @@ async function fetchPresets() {
         renderPresets(state.presets);
         renderQuickPresetSwitcher();
         renderQuickSendPresetSwitcher();
+        document.dispatchEvent(new CustomEvent('vancesender:presets-updated'));
         return true;
     } catch (e) {
         state.presets = [];
         renderQuickPresetSwitcher();
         renderQuickSendPresetSwitcher();
+        document.dispatchEvent(new CustomEvent('vancesender:presets-updated'));
         showToast('加载预设失败', 'error');
         dom.presetsGrid.innerHTML = '';
         return false;
@@ -3754,9 +3760,9 @@ function renderQuickSendList() {
 
     if (!preset || !Array.isArray(preset.texts) || preset.texts.length === 0) {
         dom.quickSendList.innerHTML = `
-        < div class="empty-state small" >
+        <div class="empty-state small">
             <p>当前预设暂无可发送文本</p>
-            </div > `;
+        </div>`;
         return;
     }
 
@@ -3766,8 +3772,8 @@ function renderQuickSendList() {
         button.className = 'quick-send-item';
 
         const badge = document.createElement('span');
-        badge.className = `badge badge - ${item.type} `;
-        badge.textContent = `/ ${item.type} `;
+        badge.className = `badge badge-${item.type}`;
+        badge.textContent = `/${item.type}`;
 
         const content = document.createElement('span');
         content.className = 'quick-send-content';
@@ -3782,7 +3788,7 @@ function renderQuickSendList() {
         button.appendChild(action);
 
         button.addEventListener('click', async () => {
-            const textToSend = `/ ${item.type} ${item.content} `;
+            const textToSend = `/${item.type} ${item.content}`;
             button.disabled = true;
 
             const dismissed = await dismissQuickPanelForSend();
@@ -5162,6 +5168,30 @@ function showToast(msg, type = 'info') {
         setTimeout(() => el.remove(), 300);
     }, 3000);
 }
+
+window.showToast = showToast;
+window.VanceSenderMedicalBridge = {
+    getPresets() {
+        return Array.isArray(state.presets) ? [...state.presets] : [];
+    },
+    openQuickSendPreset(presetId) {
+        const preset = state.presets.find((item) => item.id === presetId);
+        if (!preset) {
+            showToast('预设不存在，请刷新后重试', 'error');
+            return false;
+        }
+        state.currentQuickPresetId = presetId;
+        rememberQuickSendPresetId(state.currentQuickPresetId);
+        renderQuickSendPresetSwitcher();
+        switchToPanel('panel-quick-send');
+        return true;
+    },
+    getCurrentQuickPresetId() {
+        return state.currentQuickPresetId || '';
+    },
+    showToast,
+    switchToPanel,
+};
 
 function getFirstModalFocusableElement(modal) {
     if (!(modal instanceof HTMLElement)) return null;
