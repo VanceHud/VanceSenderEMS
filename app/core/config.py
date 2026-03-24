@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import tempfile
 import threading
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import yaml
 
 from app.core.notifications import push_notification
-from app.core.runtime_paths import get_runtime_root
+from app.core.runtime_paths import get_bundle_root, get_runtime_root
 
 
 RUNTIME_ROOT = get_runtime_root()
@@ -28,8 +31,101 @@ _cached_config: dict[str, Any] | None = None
 _cached_config_mtime: float = 0.0
 
 
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _bundled_presets_dir() -> Path:
+    return get_bundle_root() / "data" / "presets"
+
+
+def _write_json_atomic(path: Path, data: dict[str, Any]) -> None:
+    fd, tmp_path = tempfile.mkstemp(
+        suffix=".tmp",
+        prefix="preset_",
+        dir=str(path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
+def _normalize_default_preset(source_path: Path, raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+
+    name = str(raw.get("name", "")).strip()
+    texts_raw = raw.get("texts")
+    if not name or not isinstance(texts_raw, list):
+        return None
+
+    texts: list[dict[str, str]] = []
+    for item in texts_raw:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content", "")).strip()
+        if not content:
+            continue
+        line_type = str(item.get("type", "me")).strip()
+        if line_type not in ("me", "do", "b", "e"):
+            line_type = "me"
+        texts.append({"type": line_type, "content": content})
+
+    tags_raw = raw.get("tags", [])
+    tags = []
+    if isinstance(tags_raw, list):
+        tags = [str(tag).strip() for tag in tags_raw if str(tag).strip()]
+
+    sort_order_raw = raw.get("sort_order", 0)
+    sort_order = int(sort_order_raw) if isinstance(sort_order_raw, (int, float)) else 0
+    now = _now_iso()
+    return {
+        "id": source_path.stem,
+        "name": name,
+        "texts": texts,
+        "tags": tags,
+        "sort_order": sort_order,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _seed_default_presets() -> None:
+    bundled_dir = _bundled_presets_dir()
+    if not bundled_dir.exists():
+        return
+
+    try:
+        if bundled_dir.resolve() == PRESETS_DIR.resolve():
+            return
+    except OSError:
+        pass
+
+    for source_path in sorted(bundled_dir.glob("*.json")):
+        target_path = PRESETS_DIR / source_path.name
+        if target_path.exists():
+            continue
+        try:
+            with open(source_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            data = _normalize_default_preset(source_path, raw)
+            if data is None:
+                continue
+            _write_json_atomic(target_path, data)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            continue
+
+
 def _ensure_dirs() -> None:
     PRESETS_DIR.mkdir(parents=True, exist_ok=True)
+    _seed_default_presets()
 
 
 def load_config() -> dict[str, Any]:

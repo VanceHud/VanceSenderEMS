@@ -11,6 +11,7 @@ project_root = Path(SPECPATH).resolve()
 
 datas = [
     (str(project_root / "app" / "web"), "app/web"),
+    (str(project_root / "data" / "presets"), "data/presets"),
     (str(project_root / "config.yaml.example"), "."),
     (str(project_root / "icon.ico"), "."),
 ]

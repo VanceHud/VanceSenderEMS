@@ -20,7 +20,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import tkinter as tk
 from tkinter import ttk
 
-from app.core.config import PRESETS_DIR, load_config
+from app.core.config import load_config
+from app.core.presets import list_all_presets
 from app.core.desktop_shell import (
     is_quick_panel_window_visible,
     open_or_focus_quick_panel_window,
@@ -843,23 +844,7 @@ class QuickOverlayModule:
             self._restore_foreground_window()
 
     def _load_presets_from_disk(self) -> list[dict[str, Any]]:
-        PRESETS_DIR.mkdir(parents=True, exist_ok=True)
-        loaded: list[dict[str, Any]] = []
-        for fp in sorted(PRESETS_DIR.glob("*.json"), key=lambda p: p.name.lower()):
-            try:
-                with open(fp, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except (OSError, json.JSONDecodeError):
-                continue
-
-            if not isinstance(data, dict):
-                continue
-            preset_id = str(data.get("id", "")).strip()
-            name = str(data.get("name", "")).strip()
-            if not preset_id or not name:
-                continue
-            loaded.append(data)
-        return loaded
+        return list_all_presets()
 
     def _refresh_presets(self) -> None:
         if self._preset_combo is None or self._line_listbox is None:

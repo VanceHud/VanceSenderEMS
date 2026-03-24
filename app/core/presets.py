@@ -53,6 +53,49 @@ def preset_path(preset_id: str) -> Path:
     return PRESETS_DIR / f"{safe_id}.json"
 
 
+def _normalize_preset_data(raw: Any, *, fallback_id: str) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+
+    name = str(raw.get("name", "")).strip()
+    texts_raw = raw.get("texts")
+    if not name or not isinstance(texts_raw, list):
+        return None
+
+    texts: list[dict[str, str]] = []
+    for item in texts_raw:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content", "")).strip()
+        if not content:
+            continue
+        line_type = str(item.get("type", "me")).strip()
+        if line_type not in ("me", "do", "b", "e"):
+            line_type = "me"
+        texts.append({"type": line_type, "content": content})
+
+    tags_raw = raw.get("tags", [])
+    tags = []
+    if isinstance(tags_raw, list):
+        tags = [str(tag).strip() for tag in tags_raw if str(tag).strip()]
+
+    sort_order_raw = raw.get("sort_order", 0)
+    sort_order = int(sort_order_raw) if isinstance(sort_order_raw, (int, float)) else 0
+    created_at = str(raw.get("created_at", "")).strip() or now_iso()
+    updated_at = str(raw.get("updated_at", "")).strip() or created_at
+    preset_id = str(raw.get("id", "")).strip() or fallback_id
+
+    return {
+        "id": validate_preset_id(preset_id),
+        "name": name,
+        "texts": texts,
+        "tags": tags,
+        "sort_order": sort_order,
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
+
+
 def read_preset(preset_id: str) -> dict[str, Any]:
     """Read a single preset from disk.
 
@@ -64,7 +107,11 @@ def read_preset(preset_id: str) -> dict[str, Any]:
         raise PresetNotFoundError(preset_id)
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            raw = json.load(f)
+        data = _normalize_preset_data(raw, fallback_id=path.stem)
+        if data is None:
+            raise PresetError("预设文件内容无效", status_code=500)
+        return data
     except (json.JSONDecodeError, OSError) as exc:
         raise PresetError(f"预设文件读取失败: {exc}", status_code=500) from exc
 
@@ -104,10 +151,13 @@ def list_all_presets(*, tag_filter: str | None = None) -> list[dict[str, Any]]:
     for fp in sorted(PRESETS_DIR.glob("*.json")):
         try:
             with open(fp, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, KeyError):
+                raw = json.load(f)
+            data = _normalize_preset_data(raw, fallback_id=fp.stem)
+        except (json.JSONDecodeError, OSError, PresetError):
             continue
 
+        if data is None:
+            continue
         if tag_filter and tag_filter not in data.get("tags", []):
             continue
 
