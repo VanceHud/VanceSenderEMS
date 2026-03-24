@@ -42,3 +42,5 @@ Desktop.ini
 /.agent
 /node_modules
 /.claude
+/.omc
+/memory
