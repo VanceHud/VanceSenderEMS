@@ -9,7 +9,10 @@
     const API_BASE = '/api/v1';
 
     function apiHeaders() {
-        if (typeof window._apiHeaders === 'function') return window._apiHeaders();
+        const token = (typeof window.localStorage !== 'undefined')
+            ? String(window.localStorage.getItem('vs_token') || '').trim()
+            : '';
+        if (token) return { 'Authorization': 'Bearer ' + token };
         return {};
     }
 
