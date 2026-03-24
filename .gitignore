@@ -41,3 +41,4 @@ Thumbs.db
 Desktop.ini
 /.agent
 /node_modules
+/.claude
