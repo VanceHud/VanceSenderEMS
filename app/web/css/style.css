@@ -5187,31 +5187,33 @@ details[open] .send-history-toggle::before {
 }
 
 /* Sidebar overrides */
-.nav-item {
-    border-radius: 12px !important;
-    margin: 6px 16px !important;
-    transition: all 0.3s var(--macos-spring) !important;
-    border: none !important;
-}
+@media (min-width: 769px) {
+    .nav-item {
+        border-radius: 12px !important;
+        margin: 6px 16px !important;
+        transition: all 0.3s var(--macos-spring) !important;
+        border: none !important;
+    }
 
-.nav-item::before {
-    display: none !important;
-}
+    .nav-item::before {
+        display: none !important;
+    }
 
-.nav-item:hover {
-    background: rgba(255,255,255,0.06) !important;
-    transform: scale(1.02) !important;
-}
+    .nav-item:hover {
+        background: rgba(255,255,255,0.06) !important;
+        transform: scale(1.02) !important;
+    }
 
-.nav-item.active {
-    background: var(--accent-cyan) !important;
-    color: #fff !important;
-    box-shadow: 0 4px 12px rgba(10, 132, 255, 0.3) !important;
-    font-weight: 600 !important;
-}
+    .nav-item.active {
+        background: var(--accent-cyan) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 12px rgba(10, 132, 255, 0.3) !important;
+        font-weight: 600 !important;
+    }
 
-.nav-item.active svg {
-    color: #fff !important;
+    .nav-item.active svg {
+        color: #fff !important;
+    }
 }
 
 /* ── Medical Theme Components ─────────────────────────────────── */
@@ -6195,6 +6197,279 @@ details[open] .send-history-toggle::before {
 
     .med-quick-hint {
         display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .panel {
+        top: 8px;
+        left: 8px;
+        width: calc(100% - 16px);
+        height: calc(100% - 16px);
+        padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+        border-radius: 22px;
+    }
+
+    .sidebar {
+        min-height: 74px;
+        padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 6px);
+        justify-content: flex-start;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+        background: linear-gradient(180deg, rgba(3, 7, 18, 0.9), rgba(8, 15, 30, 0.96));
+        box-shadow: 0 -10px 32px rgba(2, 8, 23, 0.42);
+    }
+
+    .sidebar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-links {
+        width: max-content;
+        min-width: 100%;
+        gap: 8px;
+        padding: 0 12px;
+        justify-content: flex-start;
+        overflow: visible;
+        scroll-snap-type: x proximity;
+    }
+
+    .sidebar .label {
+        display: block;
+        max-width: 100%;
+        font-size: 0.66rem;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .nav-item {
+        flex: 0 0 auto;
+        min-width: 78px;
+        max-width: 88px;
+        min-height: 62px;
+        padding: 8px 10px;
+        border-radius: 14px;
+        border-top: none;
+        background: rgba(255, 255, 255, 0.03);
+        scroll-snap-align: center;
+    }
+
+    .nav-item.active {
+        border-top-color: transparent;
+        background: linear-gradient(180deg, rgba(56, 189, 248, 0.2), rgba(13, 148, 136, 0.1));
+        box-shadow: inset 0 0 0 1px rgba(79, 209, 255, 0.18);
+    }
+
+    .quick-send-toolbar-pill {
+        width: 100%;
+        margin: 0;
+        padding: 14px;
+        border-radius: 20px;
+    }
+
+    .pill-toolbar-content {
+        width: 100%;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 12px;
+    }
+
+    .quick-send-preset-controls {
+        width: 100%;
+        gap: 10px;
+    }
+
+    .pill-select {
+        min-width: 0;
+    }
+
+    .pill-btn {
+        flex: 0 0 40px;
+        width: 40px;
+        height: 40px;
+    }
+
+    .quick-send-list,
+    .presets-grid,
+    .quick-phrases-grid,
+    .combos-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .quick-send-content {
+        white-space: normal;
+        line-height: 1.45;
+    }
+
+    .ai-bento-layout {
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+
+    .ai-scene-card,
+    .ai-settings-card,
+    .ai-results-area {
+        padding: 16px;
+    }
+
+    .segmented-control {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .segmented-item {
+        flex: 1 1 calc(50% - 4px);
+    }
+
+    .segmented-item span {
+        padding: 10px 8px;
+        font-size: 0.82rem;
+    }
+
+    .setting-item-toggle {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .setting-item-toggle .switch {
+        align-self: flex-end;
+    }
+
+    .provider-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .provider-row > div:last-child {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .provider-row .btn,
+    .provider-row .btn-sm,
+    .medical-case-actions .btn,
+    .medical-case-actions .btn-sm {
+        width: 100%;
+    }
+
+    .header-actions,
+    .send-history-actions,
+    .conv-tree-flow-actions {
+        width: 100%;
+    }
+
+    .send-history-actions {
+        flex-wrap: wrap;
+        padding: 0 0 10px;
+    }
+
+    .send-history-actions .btn,
+    .conv-tree-flow-actions .btn {
+        flex: 1 1 calc(50% - 6px);
+    }
+
+    .send-history-list {
+        padding: 0 0 12px;
+        max-height: 280px;
+    }
+
+    .send-history-item {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .history-text,
+    .history-error {
+        max-width: none;
+        white-space: normal;
+    }
+
+    .med-tab-bar {
+        padding: 6px;
+        gap: 6px;
+    }
+
+    .med-tab {
+        flex: 0 0 auto;
+        min-width: max-content;
+        padding: 10px 12px;
+    }
+
+    .conv-tree-branch-switcher {
+        width: 100%;
+    }
+
+    .conv-tree-branch-switcher select {
+        min-width: 0;
+    }
+
+    .toast-container {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+    }
+
+    .toast {
+        min-width: 0;
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .panel {
+        top: 6px;
+        left: 6px;
+        width: calc(100% - 12px);
+        height: calc(100% - 12px);
+        padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+        border-radius: 18px;
+    }
+
+    .panel-header h1 {
+        font-size: 1.2rem;
+    }
+
+    .nav-links {
+        padding: 0 8px;
+        gap: 6px;
+    }
+
+    .nav-item {
+        min-width: 72px;
+        max-width: 80px;
+        min-height: 58px;
+        padding: 8px;
+    }
+
+    .sidebar .label {
+        font-size: 0.62rem;
+    }
+
+    .header-actions .btn,
+    .send-history-actions .btn,
+    .conv-tree-flow-actions .btn {
+        flex-basis: 100%;
+    }
+
+    .med-quick-btn-grid,
+    .med-quick-vitals-row {
+        grid-template-columns: 1fr;
+    }
+
+    .med-quick-btn {
+        min-height: 44px;
+        font-size: 0.82rem;
+    }
+
+    .quick-send-item {
+        padding: 12px 14px;
     }
 }
 

@@ -953,6 +953,15 @@ async function loadInitialData() {
 }
 
 // --- Onboarding Tutorial ---
+function scrollActiveNavItemIntoView(navItem) {
+    if (!navItem || window.innerWidth > 768) return;
+    navItem.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+    });
+}
+
 function switchToPanel(panelTarget) {
     const navItem = document.querySelector(`.nav-item[data-target="${panelTarget}"]`);
     if (!navItem) return;
@@ -961,6 +970,7 @@ function switchToPanel(panelTarget) {
     dom.panels.forEach(p => p.classList.remove('active'));
     const panel = document.getElementById(panelTarget);
     if (panel) panel.classList.add('active');
+    scrollActiveNavItemIntoView(navItem);
 }
 
 function initOnboarding() {
@@ -1253,17 +1263,11 @@ function initNavigation() {
                 if (!shouldLeave) return;
             }
 
-            // Update UI
-            dom.navItems.forEach((n) => {
-                n.classList.remove('active');
-            });
-            item.classList.add('active');
-
-            dom.panels.forEach((p) => {
-                p.classList.remove('active');
-            });
-            const target = document.getElementById(item.dataset.target);
-            target.classList.add('active');
+            switchToPanel(nextTarget);
+            const target = document.getElementById(nextTarget);
+            if (target) {
+                target.scrollTo({ top: 0, behavior: 'smooth' });
+            }
         });
     });
 }
