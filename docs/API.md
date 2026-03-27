@@ -7,6 +7,8 @@ Base URL：`http://127.0.0.1:8730/api/v1`
 - Swagger UI：`http://127.0.0.1:8730/docs`
 - OpenAPI JSON：`http://127.0.0.1:8730/openapi.json`
 
+说明：当 Cloudflare Tunnel 正在运行时，这两个地址会被运行时隐藏，以降低外网暴露面。
+
 除 SSE 接口（`/send/batch`、`/ai/generate/stream`）外，请求与响应均为 JSON。
 
 ---
@@ -761,6 +763,7 @@ GET /api/v1/settings
 - `sender`
 - `ai`
 - `quick_overlay`
+- `cloudflare_tunnel`
 
 关键说明：
 
@@ -769,6 +772,7 @@ GET /api/v1/settings
 - `server` 区块会返回运行时字段，如 `webui_url`、`docs_url`、`ui_mode`、`lan_urls`、`lan_docs_urls`
 - 当开启 LAN 且未设置 Token 时，`risk_no_token_with_lan=true`
 - `launch` 区块会返回 `onboarding_done` 字段，用于 WebUI onboarding 状态
+- `cloudflare_tunnel` 不会返回 `tunnel_token` 或 `cloudflared_path` 明文，只返回是否已设置与运行状态
 
 简化响应示例：
 
@@ -784,6 +788,18 @@ GET /api/v1/settings
     "ui_mode": "desktop",
     "lan_urls": [],
     "risk_no_token_with_lan": false,
+    "security_warning": ""
+  },
+  "cloudflare_tunnel": {
+    "enabled": false,
+    "running": false,
+    "public_url": "https://app.example.com",
+    "local_origin": "http://127.0.0.1:8730",
+    "cloudflared_path_set": true,
+    "tunnel_token_set": true,
+    "last_error": "",
+    "access_mode": "cloudflare_access_required",
+    "docs_exposed": true,
     "security_warning": ""
   },
   "launch": {
@@ -875,7 +891,63 @@ PUT /api/v1/settings/server
 
 - 修改 `lan_access` 时，后端会自动同步 `host`
 - 仅当请求中包含 `token` 字段时，后端才会清理 token 缓存
+- 当 Cloudflare Tunnel 已启用或正在运行时，不允许清空 `token`
 - 部分设置需重启生效
+
+响应：`MessageResponse`
+
+---
+
+### 更新 Cloudflare Tunnel 设置
+
+```http
+PUT /api/v1/settings/tunnel
+```
+
+可按需传递：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `enabled` | bool | 是否启用 Cloudflare Tunnel |
+| `cloudflared_path` | string | `cloudflared` 可执行文件路径 |
+| `tunnel_token` | string | 命名 Tunnel Token；保存后不会回显 |
+| `public_url` | string | 公网根地址，必须为 `https://`，且不能带 query / fragment |
+
+说明：
+
+- 仅支持命名 Tunnel，不支持 Quick Tunnel
+- 启用前必须先设置 `server.token`
+- 本应用不会校验 Cloudflare Access JWT，公网域名应由 Cloudflare Access 保护
+- 只返回 `tunnel_token_set` 与 `cloudflared_path_set`，不会回传明文
+
+响应：`MessageResponse`
+
+---
+
+### 启动或停止 Cloudflare Tunnel
+
+```http
+POST /api/v1/settings/tunnel/action
+```
+
+请求体：
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `action` | string | 是 | `start` 或 `stop` |
+
+请求示例：
+
+```json
+{
+  "action": "start"
+}
+```
+
+说明：
+
+- `start` 会再次校验本地 Token、`cloudflared_path`、`tunnel_token` 与 `public_url`
+- `stop` 会停止当前由应用托管的 `cloudflared` 子进程
 
 响应：`MessageResponse`
 

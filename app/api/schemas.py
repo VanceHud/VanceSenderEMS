@@ -249,6 +249,17 @@ class ServerSettings(BaseModel):
     token: str | None = None
 
 
+class CloudflareTunnelSettings(BaseModel):
+    enabled: bool | None = None
+    cloudflared_path: str | None = None
+    tunnel_token: str | None = None
+    public_url: str | None = None
+
+
+class CloudflareTunnelActionRequest(BaseModel):
+    action: Literal["start", "stop"]
+
+
 class LaunchSettings(BaseModel):
     open_webui_on_start: bool | None = None
     open_intro_on_first_start: bool | None = None
@@ -317,6 +328,21 @@ class ServerSettingsResponse(BaseModel):
     security_warning: str = ""
 
 
+class CloudflareTunnelSettingsResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = False
+    running: bool = False
+    public_url: str = ""
+    local_origin: str = ""
+    cloudflared_path_set: bool = False
+    tunnel_token_set: bool = False
+    last_error: str = ""
+    access_mode: str = "cloudflare_access_required"
+    docs_exposed: bool = True
+    security_warning: str = ""
+
+
 class LaunchSettingsResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -365,6 +391,7 @@ class QuickOverlaySettingsResponse(BaseModel):
 
 class SettingsResponse(BaseModel):
     server: ServerSettingsResponse
+    cloudflare_tunnel: CloudflareTunnelSettingsResponse
     launch: LaunchSettingsResponse
     sender: SenderSettingsResponse
     ai: AISettingsResponse
@@ -442,4 +469,3 @@ class NotificationItem(BaseModel):
 
 class NotificationsResponse(BaseModel):
     notifications: list[NotificationItem]
-

@@ -26,11 +26,15 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.openapi.utils import get_openapi
 
 from app.api.routes import api_router
+from app.core.cloudflare_tunnel_state import cloudflare_tunnel_manager
 from app.core.app_meta import APP_NAME, APP_VERSION, GITHUB_REPOSITORY
 from app.core.config import load_config, resolve_enable_tray_on_start, update_config
 from app.core.desktop_shell import (
@@ -85,15 +89,27 @@ def _install_asyncio_exception_filter() -> None:
 
 def create_app(lan_access: bool = False) -> FastAPI:
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
         _install_asyncio_exception_filter()
+        cfg = load_config()
+        server_token_raw = cfg.get("server", {}).get("token", "")
+        server_token = server_token_raw.strip() if isinstance(server_token_raw, str) else ""
+        runtime_port = int(getattr(app_instance.state, "runtime_port", 8730) or 8730)
+        tunnel_cfg_raw = cfg.get("cloudflare_tunnel", {})
+        tunnel_cfg = tunnel_cfg_raw if isinstance(tunnel_cfg_raw, dict) else {}
+        cloudflare_tunnel_manager.configure(tunnel_cfg, runtime_port=runtime_port)
+        cloudflare_tunnel_manager.start_if_enabled(server_token=server_token)
         yield
+        cloudflare_tunnel_manager.stop()
 
     app = FastAPI(
         title=APP_NAME,
         description="FiveM /me /do 文本发送器 & AI生成工具",
         version=APP_VERSION,
         lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
     )
 
     # CORS — restrict origins in local-only mode, open for LAN
@@ -112,6 +128,28 @@ def create_app(lan_access: bool = False) -> FastAPI:
 
     # API routes
     app.include_router(api_router)
+
+    def _docs_exposed() -> bool:
+        return not cloudflare_tunnel_manager.is_running()
+
+    @app.get("/openapi.json")
+    async def openapi_document():
+        if not _docs_exposed():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return JSONResponse(
+            get_openapi(
+                title=app.title,
+                version=app.version,
+                description=app.description,
+                routes=app.routes,
+            )
+        )
+
+    @app.get("/docs")
+    async def swagger_ui_redirect():
+        if not _docs_exposed():
+            raise HTTPException(status_code=404, detail="Not Found")
+        return get_swagger_ui_html(openapi_url="/openapi.json", title=f"{app.title} - Swagger UI")
 
     # Serve frontend static files
     if WEB_DIR.exists():
@@ -478,6 +516,9 @@ def main() -> None:
     app.state.runtime_port = port
     app.state.runtime_lan_access = runtime_lan_access
     app.state.runtime_lan_ipv4_list = lan_ipv4_list
+    tunnel_cfg_raw = cfg.get("cloudflare_tunnel", {})
+    tunnel_cfg = tunnel_cfg_raw if isinstance(tunnel_cfg_raw, dict) else {}
+    cloudflare_tunnel_manager.configure(tunnel_cfg, runtime_port=port)
 
     github_repository_url = f"https://github.com/{GITHUB_REPOSITORY}"
 
@@ -539,6 +580,14 @@ def main() -> None:
     if runtime_lan_access and not server_token:
         _log.warning("风险提示: 当前已开启局域网访问且未设置 Token。")
         _log.warning("  局域网内任意设备都可访问 API，建议尽快设置 Token 并重启服务。")
+
+    tunnel_status = cloudflare_tunnel_manager.status()
+    if tunnel_status.get("enabled"):
+        _log.info("║  Tunnel:   已启用 Cloudflare Tunnel")
+        public_url = str(tunnel_status.get("public_url", "")).strip()
+        if public_url:
+            _log.info("║  外网地址: %s", public_url)
+        _log.info("║  说明:     请确保 Cloudflare Access 已保护该公网域名")
 
     try:
         if use_desktop_shell:

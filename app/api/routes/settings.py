@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.api.schemas import (
     AISettings,
+    CloudflareTunnelActionRequest,
+    CloudflareTunnelSettings,
     DesktopWindowActionRequest,
     DesktopWindowStateResponse,
     LaunchSettings,
@@ -44,6 +46,8 @@ from app.core.desktop_shell import (
     perform_quick_panel_window_action,
     perform_window_action,
 )
+from app.core.cloudflare_tunnel import validate_cloudflare_tunnel_config
+from app.core.cloudflare_tunnel_state import cloudflare_tunnel_manager
 from app.core.network import get_lan_ipv4_addresses
 from app.core.notifications import get_notifications
 from app.core.public_config import fetch_github_public_config
@@ -166,12 +170,31 @@ def _build_server_section(cfg: dict, request: Request) -> dict:
     return server_section
 
 
+def _build_cloudflare_tunnel_section(cfg: dict) -> dict:
+    tunnel_cfg_raw = cfg.get("cloudflare_tunnel", {})
+    tunnel_cfg = tunnel_cfg_raw if isinstance(tunnel_cfg_raw, dict) else {}
+    status = cloudflare_tunnel_manager.status()
+    return {
+        "enabled": bool(tunnel_cfg.get("enabled", False)),
+        "running": bool(status.get("running", False)),
+        "public_url": str(tunnel_cfg.get("public_url", "")).strip(),
+        "local_origin": str(status.get("local_origin", "")).strip(),
+        "cloudflared_path_set": bool(str(tunnel_cfg.get("cloudflared_path", "")).strip()),
+        "tunnel_token_set": bool(str(tunnel_cfg.get("tunnel_token", "")).strip()),
+        "last_error": str(status.get("last_error", "")).strip(),
+        "access_mode": str(status.get("access_mode", "cloudflare_access_required")),
+        "docs_exposed": bool(status.get("docs_exposed", True)),
+        "security_warning": str(status.get("security_warning", "")).strip(),
+    }
+
+
 @router.get("", response_model=SettingsResponse)
 async def get_settings(request: Request):
     """获取全部设置。"""
     cfg = load_config()
     return SettingsResponse(
         server=_build_server_section(cfg, request),
+        cloudflare_tunnel=_build_cloudflare_tunnel_section(cfg),
         launch=_build_launch_section(cfg),
         sender=cfg.get("sender", {}),
         ai=_build_ai_section(cfg),
@@ -291,6 +314,14 @@ async def update_server_settings(body: ServerSettings):
     patch = {k: v for k, v in body.model_dump().items() if v is not None}
     if not patch:
         return MessageResponse(message="没有需要更新的设置", success=False)
+
+    cfg = load_config()
+    tunnel_cfg_raw = cfg.get("cloudflare_tunnel", {})
+    tunnel_cfg = tunnel_cfg_raw if isinstance(tunnel_cfg_raw, dict) else {}
+    tunnel_active = bool(tunnel_cfg.get("enabled", False)) or cloudflare_tunnel_manager.is_running()
+    if "token" in patch and not str(patch.get("token", "")).strip() and tunnel_active:
+        raise HTTPException(status_code=400, detail="请先关闭 Cloudflare Tunnel，再清除访问令牌")
+
     if "lan_access" in patch:
         host = "0.0.0.0" if patch["lan_access"] else "127.0.0.1"
         patch["host"] = host
@@ -298,6 +329,49 @@ async def update_server_settings(body: ServerSettings):
     if "token" in patch:
         invalidate_token_cache()
     return MessageResponse(message="服务器设置已更新，部分配置需重启生效")
+
+
+@router.put("/tunnel", response_model=MessageResponse)
+async def update_cloudflare_tunnel_settings(body: CloudflareTunnelSettings):
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not patch:
+        return MessageResponse(message="没有需要更新的设置", success=False)
+
+    cfg = load_config()
+    server_token = str(cfg.get("server", {}).get("token", "")).strip()
+    current_raw = cfg.get("cloudflare_tunnel", {})
+    current = current_raw if isinstance(current_raw, dict) else {}
+    next_cfg = dict(current)
+    next_cfg.update(patch)
+
+    if bool(next_cfg.get("enabled", False)):
+        validation = validate_cloudflare_tunnel_config(next_cfg, server_token=server_token)
+        if not validation.ok:
+            raise HTTPException(status_code=400, detail=validation.message)
+
+    update_config({"cloudflare_tunnel": next_cfg})
+    return MessageResponse(message="Cloudflare Tunnel 设置已更新")
+
+
+@router.post("/tunnel/action", response_model=MessageResponse)
+async def post_cloudflare_tunnel_action(body: CloudflareTunnelActionRequest):
+    cfg = load_config()
+    tunnel_cfg_raw = cfg.get("cloudflare_tunnel", {})
+    tunnel_cfg = tunnel_cfg_raw if isinstance(tunnel_cfg_raw, dict) else {}
+    server_token = str(cfg.get("server", {}).get("token", "")).strip()
+
+    if body.action == "start":
+        cloudflare_tunnel_manager.configure(
+            tunnel_cfg,
+            runtime_port=cloudflare_tunnel_manager.runtime_port(),
+        )
+        result = cloudflare_tunnel_manager.start(server_token=server_token)
+        if not result.ok:
+            raise HTTPException(status_code=400, detail=result.message)
+        return MessageResponse(message=result.message)
+
+    result = cloudflare_tunnel_manager.stop()
+    return MessageResponse(message=result.message)
 
 
 @router.put("/launch", response_model=MessageResponse)
@@ -442,4 +516,3 @@ async def get_notifications_route(clear: bool = False):
     raw_items = get_notifications(clear=clear)
     items = [NotificationItem(**item) for item in raw_items]
     return NotificationsResponse(notifications=items)
-

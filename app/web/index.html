@@ -1256,6 +1256,54 @@
                             <p class="desc" style="margin-top:4px;font-size:0.8rem;color:var(--text-muted)">设置后所有 API
                                 请求需携带此 Token</p>
                         </div>
+                        <div class="form-group" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--glass-border)">
+                            <label style="font-size:1rem;font-weight:600">Cloudflare Tunnel 外网访问</label>
+                            <p class="desc" style="margin-top:4px;font-size:0.82rem;color:var(--text-muted)">
+                                仅支持命名 Tunnel。启用前请先在 Cloudflare 侧配置 Access，并确保公网域名已指向本机 localhost 服务。</p>
+                        </div>
+                        <div class="setting-item-toggle">
+                            <div class="setting-info">
+                                <label>启用 Cloudflare Tunnel</label>
+                                <p class="desc">默认关闭。必须先设置本地 Token，并建议仅在 Cloudflare Access 已启用时使用。</p>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-tunnel-enabled">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="form-row" style="margin-top:12px">
+                            <div class="form-group" style="flex:2">
+                                <label>cloudflared 路径</label>
+                                <input type="text" id="setting-tunnel-cloudflared-path" placeholder="例如：C:\\Tools\\cloudflared.exe">
+                            </div>
+                            <div class="form-group" style="flex:2">
+                                <label>公网地址</label>
+                                <input type="url" id="setting-tunnel-public-url" placeholder="https://app.example.com">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:12px">
+                            <label>Tunnel Token</label>
+                            <input type="password" id="setting-tunnel-token" placeholder="已设置后不会回显；输入新值可更新">
+                            <p class="desc" style="margin-top:4px;font-size:0.8rem;color:var(--text-muted)">只保存 Token 是否已设置，不会在界面重新展示明文。</p>
+                        </div>
+                        <div id="tunnel-security-warning" class="risk-warning hidden" style="margin-top:12px"></div>
+                        <div id="tunnel-runtime-status" class="home-inline-tip" style="margin-top:12px">
+                            <div class="empty-state-text">
+                                <p id="tunnel-runtime-status-text">Cloudflare Tunnel 当前未启用</p>
+                                <span id="tunnel-runtime-status-sub">外网访问需配合 Cloudflare Access 与本地 Token。</span>
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-top:12px;align-items:end">
+                            <div class="form-group" style="flex:2">
+                                <label>当前外网地址</label>
+                                <input type="text" id="setting-tunnel-current-url" readonly placeholder="保存并启动后显示">
+                            </div>
+                            <div class="form-group" style="display:flex;gap:8px;align-items:center">
+                                <button type="button" id="tunnel-copy-url-btn" class="btn btn-sm mac-btn-ghost">复制地址</button>
+                                <button type="button" id="tunnel-start-btn" class="btn btn-sm mac-btn-secondary">启动 Tunnel</button>
+                                <button type="button" id="tunnel-stop-btn" class="btn btn-sm mac-btn-ghost">停止 Tunnel</button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Quick Overlay Settings -->

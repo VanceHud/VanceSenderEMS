@@ -825,6 +825,17 @@ const dom = {
     settingOverlayFontSize: document.getElementById('setting-overlay-font-size'),
     settingSystemPrompt: document.getElementById('setting-system-prompt'),
     settingToken: document.getElementById('setting-token'),
+    settingTunnelEnabled: document.getElementById('setting-tunnel-enabled'),
+    settingTunnelCloudflaredPath: document.getElementById('setting-tunnel-cloudflared-path'),
+    settingTunnelPublicUrl: document.getElementById('setting-tunnel-public-url'),
+    settingTunnelToken: document.getElementById('setting-tunnel-token'),
+    settingTunnelCurrentUrl: document.getElementById('setting-tunnel-current-url'),
+    tunnelSecurityWarning: document.getElementById('tunnel-security-warning'),
+    tunnelRuntimeStatusText: document.getElementById('tunnel-runtime-status-text'),
+    tunnelRuntimeStatusSub: document.getElementById('tunnel-runtime-status-sub'),
+    tunnelCopyUrlBtn: document.getElementById('tunnel-copy-url-btn'),
+    tunnelStartBtn: document.getElementById('tunnel-start-btn'),
+    tunnelStopBtn: document.getElementById('tunnel-stop-btn'),
     settingCustomHeaders: document.getElementById('setting-custom-headers'),
     saveSettingsBtn: document.getElementById('save-settings-btn'),
     settingsUnsavedBar: document.getElementById('settings-unsaved-bar'),
@@ -4284,6 +4295,10 @@ function getSettingsFormSnapshot() {
         overlayPollIntervalMs: dom.settingOverlayPollIntervalMs?.value || '',
         systemPrompt: dom.settingSystemPrompt?.value || '',
         token: dom.settingToken?.value || '',
+        tunnelEnabled: Boolean(dom.settingTunnelEnabled?.checked),
+        tunnelCloudflaredPath: dom.settingTunnelCloudflaredPath?.value || '',
+        tunnelPublicUrl: dom.settingTunnelPublicUrl?.value || '',
+        tunnelToken: dom.settingTunnelToken?.value || '',
         defaultProvider: dom.aiProvider?.value || '',
         customHeaders: dom.settingCustomHeaders?.value || '',
     };
@@ -4351,6 +4366,10 @@ function bindSettingsDirtyTracking() {
         dom.settingOverlayPollIntervalMs,
         dom.settingSystemPrompt,
         dom.settingToken,
+        dom.settingTunnelEnabled,
+        dom.settingTunnelCloudflaredPath,
+        dom.settingTunnelPublicUrl,
+        dom.settingTunnelToken,
         dom.aiProvider,
         dom.settingCustomHeaders,
     ].filter(Boolean);
@@ -4472,6 +4491,126 @@ function initSettingsPanel() {
             if (e.message !== 'AUTH_REQUIRED') showToast('操作失败', 'error');
         }
     });
+
+    if (dom.tunnelCopyUrlBtn) {
+        dom.tunnelCopyUrlBtn.addEventListener('click', async () => {
+            const url = String(dom.settingTunnelCurrentUrl?.value || '').trim();
+            if (!url) {
+                showToast('当前没有可复制的外网地址', 'info');
+                return;
+            }
+            const copied = await copyTextToClipboard(url);
+            showToast(copied ? '外网地址已复制' : '复制失败，请手动复制', copied ? 'success' : 'error');
+        });
+    }
+
+    if (dom.tunnelStartBtn) {
+        dom.tunnelStartBtn.addEventListener('click', () => {
+            void controlCloudflareTunnel('start');
+        });
+    }
+
+    if (dom.tunnelStopBtn) {
+        dom.tunnelStopBtn.addEventListener('click', () => {
+            void controlCloudflareTunnel('stop');
+        });
+    }
+}
+
+function renderCloudflareTunnelPanel(tunnelSettings, serverSettings) {
+    const tunnel = tunnelSettings || {};
+    const tokenSet = Boolean(serverSettings?.token_set);
+    const enabled = Boolean(tunnel.enabled);
+    const running = Boolean(tunnel.running);
+    const publicUrl = String(tunnel.public_url || '').trim();
+    const warning = String(tunnel.security_warning || '').trim();
+    const lastError = String(tunnel.last_error || '').trim();
+    const docsExposed = Boolean(tunnel.docs_exposed);
+
+    if (dom.settingTunnelEnabled) {
+        dom.settingTunnelEnabled.checked = enabled;
+    }
+    if (dom.settingTunnelCloudflaredPath) {
+        dom.settingTunnelCloudflaredPath.value = tunnel.cloudflared_path_set
+            ? (dom.settingTunnelCloudflaredPath.value || '')
+            : '';
+        if (!dom.settingTunnelCloudflaredPath.value) {
+            dom.settingTunnelCloudflaredPath.placeholder = tunnel.cloudflared_path_set
+                ? '已设置（输入新路径可更新）'
+                : '例如：C:\\Tools\\cloudflared.exe';
+        }
+    }
+    if (dom.settingTunnelPublicUrl) {
+        dom.settingTunnelPublicUrl.value = publicUrl;
+    }
+    if (dom.settingTunnelToken) {
+        dom.settingTunnelToken.value = '';
+        dom.settingTunnelToken.placeholder = tunnel.tunnel_token_set
+            ? '已设置（输入新值可更新）'
+            : '已设置后不会回显；输入新值可更新';
+    }
+    if (dom.settingTunnelCurrentUrl) {
+        dom.settingTunnelCurrentUrl.value = publicUrl;
+    }
+    if (dom.tunnelSecurityWarning) {
+        const messages = [];
+        if (!tokenSet) {
+            messages.push('请先设置本地访问令牌（Token），否则不能启用外网访问。');
+        }
+        if (warning) {
+            messages.push(warning);
+        }
+        if (lastError) {
+            messages.push(`最近错误：${lastError}`);
+        }
+        dom.tunnelSecurityWarning.textContent = messages.join(' ');
+        dom.tunnelSecurityWarning.classList.toggle('hidden', messages.length === 0);
+    }
+    if (dom.tunnelRuntimeStatusText) {
+        dom.tunnelRuntimeStatusText.textContent = running
+            ? 'Cloudflare Tunnel 运行中'
+            : enabled
+                ? 'Cloudflare Tunnel 已启用但当前未运行'
+                : 'Cloudflare Tunnel 当前未启用';
+    }
+    if (dom.tunnelRuntimeStatusSub) {
+        dom.tunnelRuntimeStatusSub.textContent = running
+            ? `公网地址：${publicUrl || '未设置'} ｜ 在线文档：${docsExposed ? '可访问' : '已隐藏'}`
+            : (lastError || '外网访问需配合 Cloudflare Access 与本地 Token。');
+    }
+    if (dom.tunnelStartBtn) {
+        dom.tunnelStartBtn.disabled = !tokenSet;
+    }
+    if (dom.tunnelStopBtn) {
+        dom.tunnelStopBtn.disabled = !running;
+    }
+}
+
+async function controlCloudflareTunnel(action) {
+    const tokenSet = Boolean(state.settings?.server?.token_set);
+    if (action === 'start' && !tokenSet) {
+        showToast('请先设置本地 Token，再启动 Cloudflare Tunnel', 'error');
+        return;
+    }
+
+    try {
+        const response = await apiFetch('/api/v1/settings/tunnel/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            showToast(payload.detail || 'Cloudflare Tunnel 操作失败', 'error');
+            return;
+        }
+        showToast(payload.message || 'Cloudflare Tunnel 状态已更新', 'success');
+        await fetchSettings();
+    } catch (e) {
+        if (e.message !== 'AUTH_REQUIRED') {
+            showToast('Cloudflare Tunnel 操作失败', 'error');
+        }
+    }
 }
 
 function renderUpdateCheckResult(data) {
@@ -4833,6 +4972,7 @@ async function fetchSettings() {
     // Token display
     dom.settingToken.value = '';
     dom.settingToken.placeholder = data.server.token_set ? '已设置 (输入新值可更新)' : '留空则不启用认证';
+    renderCloudflareTunnelPanel(data.cloudflare_tunnel || {}, data.server || {});
 
     if (dom.homeCurrentVersion) {
         dom.homeCurrentVersion.textContent = data.server.app_version || '-';
@@ -5035,6 +5175,21 @@ async function saveAllSettings() {
         if (newToken) {
             setToken(newToken);
         }
+
+        const tunnelPayload = {
+            enabled: Boolean(dom.settingTunnelEnabled?.checked),
+            cloudflared_path: String(dom.settingTunnelCloudflaredPath?.value || '').trim(),
+            public_url: String(dom.settingTunnelPublicUrl?.value || '').trim(),
+        };
+        const newTunnelToken = String(dom.settingTunnelToken?.value || '').trim();
+        if (newTunnelToken) {
+            tunnelPayload.tunnel_token = newTunnelToken;
+        }
+        await apiFetch('/api/v1/settings/tunnel', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(tunnelPayload)
+        });
 
         // Quick Overlay Settings
         const overlayMouseSideButton = normalizeOverlayMouseSideButton(dom.settingOverlayMouseSideButton.value);
@@ -5931,4 +6086,3 @@ document.addEventListener('keydown', (event) => {
     });
     $deleteBranchBtn.addEventListener('click', deleteBranch);
 })();
-

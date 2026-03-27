@@ -4,6 +4,12 @@ server:
   lan_access: false
   token: ''
 
+cloudflare_tunnel:
+  enabled: false
+  cloudflared_path: ''
+  tunnel_token: ''
+  public_url: ''
+
 launch:
   enable_tray_on_start: true
   close_action: ask
@@ -79,4 +85,3 @@ ai:
     X-Stainless-Arch: ''
     X-Stainless-Runtime: ''
     X-Stainless-Runtime-Version: ''
-

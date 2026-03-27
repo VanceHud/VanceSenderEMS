@@ -288,6 +288,12 @@ def _default_config() -> dict[str, Any]:
             "lan_access": False,
             "token": "",
         },
+        "cloudflare_tunnel": {
+            "enabled": False,
+            "cloudflared_path": "",
+            "tunnel_token": "",
+            "public_url": "",
+        },
         "launch": {
             "open_webui_on_start": False,
             "open_intro_on_first_start": False,
